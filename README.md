@@ -50,11 +50,14 @@ python tools/extract_keyframes_niiuit.py path/to/videos_or_video.mp4 \
   --out-dir keyframes-out/clip --model clip --stride 10 --min-cosine-distance 0.15
 
 python tools/compare_keyframes.py \
-  --dir-a keyframes-out/clip --dir-b keyframes-out/beit3 \
-  --label-a clip --label-b beit3 --out-dir compare-out/clip_vs_beit3 \
-  --ref-map-dir map-keyframes-aic25-b1/map-keyframes
+  --roots \
+    clip:keyframes-out/clip \
+    siglip:keyframes-out/siglip \
+    beit3:keyframes-out/beit3 \
+    btc:keyframes-out/btc \
+  --out-dir compare-out/L21_4way
 ```
 
-Open `compare-out/.../index.html` for manual side-by-side samples. Density stats flag gaps larger than ~10 frames (typical TRAKE answer window length).
+Each root must contain `VIDEO_ID/map.csv` (+ images). Open `compare-out/.../index.html`. Density stats flag gaps larger than ~10 frames (typical TRAKE answer window length). Legacy `--dir-a/--dir-b` still works for pairwise compares.
 
 Coding-agent constraints live in [AGENTS.md](AGENTS.md).
