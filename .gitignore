@@ -1,0 +1,67 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments (keep only .venv/; never create venv in repo root on Windows)
+.venv/
+venv/
+env/
+# Accidental `python -m venv .` leftovers at repo root (case-sensitive git; Windows FS is not)
+/Scripts/
+/Include/
+/Lib/
+/pyvenv.cfg
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Tooling / IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Notebooks / caches
+.ipynb_checkpoints/
+.cache/
+*.log
+
+# Common ML / index artifacts (do not commit by default)
+*.npy
+*.npz
+*.faiss
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# Media (if ever placed under the repo)
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.webm
+
+# Local previews / bulky outputs
+artifacts/
+keyframes-out/
+compare-out/
+*.webp
+
+# Contest batch media/features (run extract on Kaggle/local hosts)
+clip-features-32-aic25-b1/
+map-keyframes-aic25-b1/
+media-info-aic25-b1/
+objects-aic25-b1/
+Thong tin vong So tuyen AIC2026.pdf
+PreviousTeamSubmission/*.pdf
