@@ -15,7 +15,7 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 | Idea | Organizer CLIP ViT-B/32 `.npy` gallery + CLIP text query → top-k → `map-keyframes` → `(video_id, frame_id)`; preview via YouTube `watch?v=&t=` (`moment_url`) |
 | Code | `tools/kis_search.py` |
 | Open | FAISS, second embedding, OCR/ASR index, contest UI — not required for first loop |
-| Keyframes | CLI: `tools/extract_keyframes_niiuit.py` (stride + semantic dedup; models `clip`/`siglip`/`beit3`); compare: `tools/compare_keyframes.py` (density vs ~10-frame TRAKE windows + HTML manual samples) |
+| Keyframes | Package `tools/extract_features`: **extract** (videos → stills + `embeddings.npy`) and **embed** (still tree → `VIDEO_ID.npy`). After extract, `embed --copy-embeddings` copies those npy files (no second CLIP pass). Default CPU; `--device gpu`. |
 
 ---
 
@@ -78,6 +78,7 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 - Local machine / checkout setup (venv paths, CLI folder layout, etc.) lives in `AGENTS.md` only — not in these notes (docs are shared via GitHub).
 - Paper PDFs → sibling `.md` extract; summaries in `PreviousTeamSubmission/SUMMARIES.md`; memory for **our** direction → this file.
 - When discussing methods/system design: **cite existing work first** (local summaries + this file + repo code, then short web/arXiv search). See AGENTS.md / project-memory rule.
+- **Human learning + best practice:** follow the human’s idea and repo patterns when they are valid; if a common practice is better, **say so and discuss before implementing**. Explain load-bearing concepts (tests, extract vs embed, device flags, packages). Hard rule also in `AGENTS.md`.
 
 ---
 
@@ -98,6 +99,9 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 | 2026-08-06 | NII-UIT paper | Summarized in `SUMMARIES.md`; extract `NII-UIT_VBS2025.md` |
 | 2026-08-06 | Soft temporal | Vortex / U-CESE / NII-UIT mostly cluster/neighborhood scoring; hard order under-specified — open for TRAKE |
 | 2026-08-07 | Keyframe CLI | NII-UIT-style extract (`clip`/`siglip`/`beit3`) + compare (density/TRAKE gaps + HTML samples) under `tools/` |
+| 2026-08-12 | Extract encoder | Commit **CLIP** as the only default extract; skip 3-way compare as a gate. SigLIP = optional later embed on same frames; our BEiT-3 checkpoint is not NII-UIT’s. |
+| 2026-08-12 | extract_features pkg | `tools/extract_features` engines (extract + embed); CLI `--device cpu\|gpu\|cuda`; removed `extract_keyframes_niiuit.py` / `keyframe_models.py`. |
+| 2026-08-12 | Agent collab | Do not blindly follow suggestions; recommend best practice and discuss first. Explain vital concepts so the human learns the stack. |
 
 ---
 
@@ -107,7 +111,7 @@ Use this section when continuing design chats:
 
 - [ ] What do we want ranked first for TRAKE: **clips covering N events** or **boosted single-event lists**?
 - [ ] For TRAKE, do we add **hard timestamp order** (monotonic `f1 < f2 < …`) on top of soft cluster cover?
-- [ ] Do we keep BTC keyframes only, or also re-extract (NII-UIT stride+dedup / DAKE / AutoShot)? Compare density (`compare_keyframes.py`) before committing.
+- [ ] Do we keep BTC keyframes only, or also index the CLIP re-extract (stride/threshold tweak if TRAKE gaps look large)? SigLIP/BEiT-3 trees not required.
 - [ ] Semantic text channel: which encoder (multilingual sentence transformer vs CLIP text) for OCR/ASR/captions?
 - [ ] Research note: survey temporal-memory / recurrent video captioning beyond ReCap
 - [ ] When to start UI relative to second embedding / RRF

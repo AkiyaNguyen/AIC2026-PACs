@@ -20,3 +20,9 @@ Use a **two-layer** check before proposing something as new:
 3. In the reply: what exists (local + web) → what we would **reuse** → only then what would be **new** for PACs.
 
 Limits: search is not exhaustive; prefer named prior art over claiming novelty; do not scrape paywalled PDFs when a citation + abstract is enough.
+
+## Collaboration (do not rubber-stamp)
+
+- Follow the human’s idea and existing code patterns when they are a valid way to ship.
+- If a common practice is clearly better, **recommend it and discuss before implementing** — do not silently override or blindly code the first suggestion.
+- The human is learning the stack: explain load-bearing concepts in the reply (tests, extract vs embed, GPU flags, packages), not only ship code.

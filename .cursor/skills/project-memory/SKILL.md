@@ -38,6 +38,12 @@ Do not claim an idea is original without this check. Search is not exhaustive; p
 - Refined **our** design → update `DiscussionNotes.md`.
 - New prior-team PDF studied → append/update a section in `SUMMARIES.md` (factual; clarifications table only for common misreadings). Do not put PACs roadmap into paper summaries.
 
+## Collaboration
+
+- Follow the human’s idea and repo patterns when valid.
+- If a better common practice exists, recommend it and **wait for agreement** before the final implementation.
+- Explain vital concepts (the human is learning), not only implement. Hard rule: `AGENTS.md`.
+
 ## Style
 
 - English for repo-authored notes.

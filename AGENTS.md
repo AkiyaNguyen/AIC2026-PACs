@@ -43,6 +43,13 @@ Hard constraints for coding agents working in this repository.
 - Prior-team papers: `PreviousTeamSubmission/` — PDF + full `.md` extract; all paper summaries in `PreviousTeamSubmission/SUMMARIES.md`.
 - When reading a PDF: extract to **Markdown beside the PDF** (skill `pdf-extract`); prefer `.md` over `.txt`. For studied prior-team papers, append/update a section in `SUMMARIES.md`.
 
+## Collaboration (human is learning the stack)
+
+- Treat the human as a **teammate who wants to understand**, not only a requester. When a concept is load-bearing (tests, embeddings vs extract, GPU opt-in, package vs script), **explain it in the reply** instead of only implementing.
+- **Follow their idea and existing code patterns** when that is a valid way to ship.
+- **Do not blindly implement a suggestion** if a common practice is clearly better (safer CLI, less duplicate GPU work, clearer layout, etc.). **Notice them, recommend the practice, and wait for agreement** before producing the final solution.
+- After a collaboration or design rule is settled, record it in `docs/memory/DiscussionNotes.md`.
+
 ## Anti-reinvention (methods / system design)
 
 When discussing methods or system design, **before** proposing something as new:
