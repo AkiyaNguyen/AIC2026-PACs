@@ -14,8 +14,9 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 | Status | Active first slice |
 | Idea | Organizer CLIP ViT-B/32 `.npy` gallery + CLIP text query → top-k → `map-keyframes` → `(video_id, frame_id)`; preview via YouTube `watch?v=&t=` (`moment_url`) |
 | Code | `tools/kis_search.py` |
-| Open | FAISS, second embedding, OCR/ASR index, contest UI — not required for first loop |
+| Open | FAISS, second embedding, ASR + semantic text embed/search, contest UI |
 | Keyframes | Package `tools/extract_features`: **extract** (videos → stills + `embeddings.npy`) and **embed** (still tree → `VIDEO_ID.npy`). After extract, `embed --copy-embeddings` copies those npy files (no second CLIP pass). Default CPU; `--device gpu`. |
+| OCR (v1) | Package `tools/extract_ocr`: default **EasyOCR** (en+vi) over still tree → `OUT/VIDEO_ID/ocr.jsonl` (1:1 with map rows). PaddleOCR optional via `--backend paddleocr` when wheels exist. Semantic embed of `ocr_text` is a later slice. Deps: `requirements-ocr.txt`. |
 
 ---
 
@@ -25,7 +26,15 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 
 - Large media hosting undecided (local SSD vs Kaggle indexing vs stream-only preview).
 - Do not lock a path in README until chosen; ask before inventing layout in code.
-- YouTube embeds with `autoplay=0` often unusable → prefer watch URLs with `t=`.
+- YouTube watch/`t=` links are **unreliable** (team has hit dead/blocked videos) → **not** the only preview path.
+- **Index vs media (working rule):** Organize **embeddings** (and maps) for search — flat `VIDEO_ID.npy` + `map.csv` / `frame_idx` is enough for KIS ranking. Media uses lookups (`video_id` → keyframe dir, `video_id` → mp4 path). Do not merge every Kaggle zip into one mirrored mega-tree unless forced.
+- **Index layout (accepted 2026-08-12):** `features/clip/L**/VIDEO_ID.npy` + flat `features/maps/VIDEO_ID.csv` (same rows as keyframe `map.csv`). Kaggle stills datasets: zip root = `VIDEO_ID/{map.csv,*.webp,embeddings.npy}` (see `tools/kf_embed_extraction.ipynb`). Local bulky stills may live outside the repo (e.g. `C:/AIC2026-media/`).
+- **Minimum offline media (draft, pending host choice):**
+  1. **Hot (search):** CLIP gallery + maps only — laptop/GPU box running query.
+  2. **Warm (UI preview — required when YT fails):** **keyframe stills** on a disk the UI can open fast (local SSD / NAS / object storage with HTTP). Path pattern TBD; lookup by `video_id` + keyframe file from `map.csv`. This is the **minimum** visual DB for result grids (same idea as VBS systems: VISIONE / diveXplore / VideoEase serve keyframe images, not YouTube).
+  3. **Cold (playback / verify motion):** **raw mp4** on bulk storage (external HDD, Kaggle dataset, or same NAS). Not loaded into the vector store; open/seek only when user clicks a hit. Optional later: reduced proxies for scrubbing.
+  4. YouTube `moment_url` remains a **bonus** when it works, never the sole preview.
+  5. Later ANN: FAISS/Milvus for vectors only; media stays outside (Vortex/U-CESE/NII-UIT + Milvus blog pattern).
 
 ### Temporal captions / near-past context (ReCap-style)
 
@@ -39,6 +48,14 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 - Classic ES/BM25 matches **surface tokens** (plus optional synonyms/analyzers). It will **not** reliably match English query “fruit” to OCR “chuối” without translation, synonym lists, or semantic embeddings.
 - Direction: keep keyword/ES-style filters as a **cheap** tool; plan a **semantic text channel** (embed OCR/ASR/captions with a multilingual text encoder or CLIP-class text tower; cosine search; optional query expansion / translation). Same spirit as U-CESE TextualDB embeddings, not only raw ES.
 - Keep this channel **separate** from visual RRF unless we later decide to fuse ranks deliberately.
+
+### ASR / transcript extractor models (discussion 2026-08-14)
+
+- **Local papers:** Vortex and U-CESE both name **OpenAI Whisper** (Radford et al. 2022) as the ASR; they do **not** publish size (`large-v2` vs `large-v3`) or runtime (`openai-whisper` vs `faster-whisper`). Vortex aligns subtitle intervals onto keyframes (`a ≤ t_k ≤ b`) and **carries last speech through silence**. U-CESE uses Whisper subtitles as ReCap input, then indexes caption/ASR in ES + MobileCLIP text. NII-UIT VBS write-up has **no ASR**. Repo stub: `tools/extract_transcript/` (empty); OCR JSONL contract is the intended sibling.
+- **U-CESE related work:** Whisper is “the primary ASR model used in several systems”; **Vintern-1B is captioning/OCR, not ASR**.
+- **Web / VBS:** diveXplore uses Whisper; Fusionista2.0 (VBS, UIT/AISIA) switched vanilla Whisper → **faster-whisper** (CTranslate2, ~4×) because V3C audio is often ambient, so a huge checkpoint is not worth the cost. VBS also ships shared ASR dumps (Rossetto et al.) — AIC does not, so we must run our own.
+- **Not the same thing:** `faster-whisper` = same Whisper weights, faster engine. **PhoWhisper** (VinAI, arXiv:2406.02555) = Whisper fine-tuned on 844h Vietnamese (large = Whisper **large-v2** architecture). **WhisperX** = Whisper + forced alignment for tighter timestamps.
+- **PACs (2026-08-14):** `faster-whisper` + **`large-v3`**. CLI: `python -m tools.extract_transcript INPUT --audio-dir features/audio/Lxx --out-dir features/asr/Lxx --device gpu`. ffmpeg WAV 16 kHz mono → JSONL segments (`start`/`end`/`text`). Deps: `requirements-asr.txt`. Kaggle: [`kaggle_script/asr_extraction.ipynb`](../../kaggle_script/asr_extraction.ipynb) (zip JSONL only). Shared device: `tools/util.get_proper_device`.
 
 ### After baseline KIS (candidates, not committed)
 
@@ -102,6 +119,10 @@ Update this file when a design idea is refined, accepted, deferred, or rejected.
 | 2026-08-12 | Extract encoder | Commit **CLIP** as the only default extract; skip 3-way compare as a gate. SigLIP = optional later embed on same frames; our BEiT-3 checkpoint is not NII-UIT’s. |
 | 2026-08-12 | extract_features pkg | `tools/extract_features` engines (extract + embed); CLI `--device cpu\|gpu\|cuda`; removed `extract_keyframes_niiuit.py` / `keyframe_models.py`. |
 | 2026-08-12 | Agent collab | Do not blindly follow suggestions; recommend best practice and discuss first. Explain vital concepts so the human learns the stack. |
+| 2026-08-12 | Media vs index | Prioritize organized CLIP gallery + maps; videos/stills only need resolvable paths (lookup), not one merged tree. |
+| 2026-08-12 | OCR v1 | EasyOCR default (`tools/extract_ocr` → `ocr.jsonl`); PaddleOCR optional (no wheel on Py3.14 here). ASR / text-embed deferred. |
+| 2026-08-12 | features layout | `features/clip/L**/VIDEO_ID.npy` + `features/maps/VIDEO_ID.csv`; Kaggle stills zip root = `VIDEO_ID/…` (`kf_embed_extraction.ipynb`). |
+| 2026-08-14 | ASR extract | CLI + engine: ffmpeg WAV → faster-whisper `large-v3` → `features/asr/Lxx/VIDEO_ID.jsonl`. `--audio-dir` for wavs. |
 
 ---
 
@@ -112,7 +133,9 @@ Use this section when continuing design chats:
 - [ ] What do we want ranked first for TRAKE: **clips covering N events** or **boosted single-event lists**?
 - [ ] For TRAKE, do we add **hard timestamp order** (monotonic `f1 < f2 < …`) on top of soft cluster cover?
 - [ ] Do we keep BTC keyframes only, or also index the CLIP re-extract (stride/threshold tweak if TRAKE gaps look large)? SigLIP/BEiT-3 trees not required.
+- [x] OCR extract v1: EasyOCR → `ocr.jsonl` (`tools/extract_ocr`; Paddle optional)
 - [ ] Semantic text channel: which encoder (multilingual sentence transformer vs CLIP text) for OCR/ASR/captions?
+- [ ] ASR engine (Whisper) → `features/asr/Lxx/VIDEO_ID.jsonl` (CLI dry-run exists)
 - [ ] Research note: survey temporal-memory / recurrent video captioning beyond ReCap
 - [ ] When to start UI relative to second embedding / RRF
 - [ ] SD / generative queries: skip for v1, or A/B as optional fused channel with verification?

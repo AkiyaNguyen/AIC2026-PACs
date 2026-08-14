@@ -51,11 +51,18 @@ Thumbs.db
 *.mkv
 *.mov
 *.webm
+*.wav
 
 # Local previews / bulky outputs
 artifacts/
 keyframes-out/
+ocr-out/
+clip-npy/
+features/
 compare-out/
+keyframes-L21/
+keyframes-L22/
+keyframes-L*.zip
 *.webp
 
 # Contest batch media/features (run extract on Kaggle/local hosts)

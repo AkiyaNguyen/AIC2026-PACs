@@ -6,7 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from tools.extract_features.engine.clip import load_clip, resolve_device
+from tools.extract_features.engine.clip import load_clip
+from tools.util import get_proper_device
 from tools.extract_features.engine.embed import embed_tree
 from tools.extract_features.engine.extract import load_list_file, run_extract, safe_print
 
@@ -16,7 +17,7 @@ def _add_device(p: argparse.ArgumentParser) -> None:
         "--device",
         choices=("cpu", "gpu", "cuda"),
         default="cpu",
-        help="cpu (default) or gpu/cuda for CLIP encode",
+        help="cpu (default) or gpu (CUDA, else MPS)",
     )
 
 
@@ -115,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("--stride must be >= 1")
         if not (0.0 <= args.min_cosine_distance <= 2.0):
             raise SystemExit("--min-cosine-distance should be in [0, 2]")
-        device = resolve_device(args.device)
+        device = get_proper_device(args.device)
         safe_print(f"Loading CLIP ViT-B/32 device={device} ...")
         embedder = load_clip(device)
         inputs = list(args.inputs)
@@ -143,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
                 device_label="cpu",
             )
             return 0
-        device = resolve_device(args.device)
+        device = get_proper_device(args.device)
         safe_print(f"Loading CLIP ViT-B/32 device={device} ...")
         embedder = load_clip(device)
         embed_tree(

@@ -1,4 +1,4 @@
-"""CLIP ViT-B/32 image encoder and --device resolution."""
+"""CLIP ViT-B/32 image encoder."""
 
 from __future__ import annotations
 
@@ -7,26 +7,6 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from PIL import Image
-
-
-def parse_device_name(name: str) -> str:
-    """Map CLI --device to a torch device type name (cpu | cuda)."""
-    key = name.strip().lower()
-    if key == "cpu":
-        return "cpu"
-    if key in ("gpu", "cuda"):
-        return "cuda"
-    raise SystemExit(f"Unknown --device {name!r}. Use cpu, gpu, or cuda.")
-
-
-def resolve_device(name: str) -> torch.device:
-    """Return a torch device. GPU is opt-in; missing CUDA is a hard error."""
-    torch_name = parse_device_name(name)
-    if torch_name == "cuda" and not torch.cuda.is_available():
-        raise SystemExit(
-            "CUDA requested (--device gpu) but torch.cuda.is_available() is False"
-        )
-    return torch.device(torch_name)
 
 
 @dataclass
