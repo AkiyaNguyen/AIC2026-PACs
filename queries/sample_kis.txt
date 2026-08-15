@@ -1,4 +1,0 @@
-# Sample Textual KIS queries (one per line)
-a person speaking at a press conference outdoors
-red shirt speaker with trees in the background
-news studio with anchors

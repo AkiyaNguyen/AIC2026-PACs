@@ -1,6 +1,6 @@
 # PACs — AIC 2026
 
-Internal repository for team **PACs** in the Ho Chi Minh City AI Challenge (AIC) 2026: shared code, docs, and contest submission artifacts.
+Internal repository for team **PACs** in the Ho Chi Minh City AI Challenge (AIC) 2026: shared code and contest submission artifacts.
 
 ## Problem summary (preliminary round)
 
@@ -12,49 +12,65 @@ Three query types:
 
 Each query allows up to **100** ranked answers. Scoring uses R-Score per answer and a **Final Score** that averages best R-Score at cutoffs `@1, @5, @20, @50, @100` — so ranking order matters.
 
-Full official statement and scoring details: [docs/organization-board/thong-tin-vong-so-tuyen-aic2026.md](docs/organization-board/thong-tin-vong-so-tuyen-aic2026.md).
-
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| `docs/organization-board/` | Official Organization Board (BTC) materials (PDF + parsed text) |
-| `map-keyframes-aic25-b1/` | Keyframe → `frame_idx` maps (CSV) for batch-1 sample data |
-| `media-info-aic25-b1/` | Per-video metadata JSON (YouTube-style fields) |
-| `clip-features-32-aic25-b1/` | Per-video CLIP ViT-B/32 `.npy` features |
-| `objects-aic25-b1/` | Per-keyframe object detections (JSON) |
-| `tools/` | CLI tools (KIS search, `extract_features` package, optional keyframe compare). Avoid a top-level `scripts/` folder on Windows — it collides with venv `Scripts/`. |
-| `queries/` | Sample text query files |
-| `PreviousTeamSubmission/` | Prior AIC team papers (PDF + `.md` extract); summaries in `SUMMARIES.md` |
-| `docs/memory/` | `DiscussionNotes.md` — our method direction (human↔agent) |
-| `.venv/` | Local Python virtualenv (not committed) |
+| `engine/` | Retrieval: CLIP/ASR encoders, FAISS, keyframe→ASR map, `search()` |
+| `preprocessing_tools/` | Offline extract (keyframes/CLIP, Whisper ASR) |
+| `kaggle_script/` | Kaggle / local notebooks (CLIP merge, ASR embed, ASR merge) |
+| `features/` | Local retrieval index (gitignored). Full copy: `C:\AIC2026-media\features\` |
+
+Set `FEATURES_ROOT` in `.env` to the `features/` directory you search over.
+
+## `features/` tree (retrieval index)
+
+Working set is usually **L21–L24**. Same layout for the full corpus on the media drive.
+
+```text
+features/
+  clip/
+    model.json                 # CLIP id / dim (ViT-B-32, dim 512)
+    embeddings.npy             # concatenated keyframe vectors (N_clip, 512)
+    gallery_map.csv            # video_id, start_row, n_rows  (into embeddings / FAISS)
+    index.faiss                # IndexFlatIP over embeddings.npy (row i = FAISS id i)
+    L21/
+      L21_V001.npy             # (N_frames, 512) one video; rows align with maps CSV
+      ...
+    L22/ L23/ L24/ ...
+  maps/
+    L21_V001.csv               # per keyframe: frame_idx, pts_time, fps, ...
+    ...                        # row k of this CSV = row k of clip/Lxx/VIDEO_ID.npy
+  asr_emb/
+    model.json                 # MiniLM id / dim 384 / normalize
+    embeddings.npy             # concatenated segment vectors (N_seg, 384)
+    gallery_map.csv            # video_id, start_row, n_rows  (into embeddings.npy)
+    L21/
+      L21_V001.npy             # (N_seg, 384)
+      L21_V001.jsonl           # {start, end, text} — line i ↔ npy row i
+      ...
+    L22/ L23/ L24/ ...
+```
+
+How rows connect at search time:
+
+1. CLIP FAISS hit `i` → `clip/gallery_map.csv` → `video_id` + local keyframe row.
+2. `maps/VIDEO_ID.csv` local row → `pts_time`, `frame_idx` (submission id).
+3. `asr_emb/gallery_map.csv` → slice of `asr_emb/embeddings.npy` for that video.
+4. JSONL `start`/`end` vs `pts_time` (distance &lt; 3s) → ASR rows to score.
+
+`n_rows` in CLIP map = keyframes. `n_rows` in ASR map = speech segments (not the same count).
 
 ## Status
 
-Early setup. Baseline Textual KIS CLI exists; fuller pipeline still TBD.
+- Offline: CLIP gallery + FAISS, Whisper segments, MiniLM ASR embeddings + maps.
+- Online: `engine.Embedder.search` — visual top-k pool, ASR max-cosine on that pool, weighted sum, rerank. OCR later.
 
-## Quick start (KIS search)
+## Quick start
 
 ```bash
 python -m venv .venv
 .venv/Scripts/pip install -r requirements.txt
-.venv/Scripts/python tools/kis_search.py queries/sample_kis.txt --top_k 10
+# FEATURES_ROOT=.../features  in .env
+python -m engine.Embedder
 ```
-
-## Keyframe extract + embed (NII-UIT + CLIP)
-
-Package: `tools/extract_features`. Default **CPU**; add `--device gpu` (or `cuda`) to run CLIP on CUDA. Extract samples every `--stride` frame and keeps a frame only if CLIP cosine distance from the last kept frame is large enough.
-
-```bash
-# VIDEO_DIR can be the dataset parent — finds all nested videos in one run
-python -m tools.extract_features extract /kaggle/input/.../dataset-aic \
-  --out-dir /kaggle/working/keyframes-out --device gpu
-
-# After extract: copy VIDEO_ID/embeddings.npy → gallery/VIDEO_ID.npy (no second CLIP pass)
-python -m tools.extract_features embed /kaggle/working/keyframes-out \
-  --out-dir /kaggle/working/clip-gallery --copy-embeddings
-```
-
-Extract walks the input folder recursively. Output is **flat** `keyframes-out/VIDEO_ID/...` (not a mirror of `Videos_L21_a/`). Embed `--copy-embeddings` writes `clip-gallery/VIDEO_ID.npy` for `kis_search.py --clip-dir`. Kaggle notebook: [`tools/aic2026-extract-features.ipynb`](tools/aic2026-extract-features.ipynb).
-
-Coding-agent constraints live in [AGENTS.md](AGENTS.md).

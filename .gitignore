@@ -1,4 +1,13 @@
-# Environment / secrets
+# Local / bulky / team-private (not on remote)
+.cursor/
+docs/
+draft/
+features/
+media-info-aic25-b1/
+PreviousTeamSubmission/
+queries/
+tests/
+AGENTS.md
 .env
 .env.*
 !.env.example

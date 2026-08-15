@@ -4,3 +4,7 @@ open-clip-torch>=2.24
 opencv-python-headless>=4.8
 Pillow>=10.0
 matplotlib>=3.7
+# FAISS: install only one (both expose `import faiss`). CPU works on Windows.
+faiss-cpu>=1.8.0
+# GPU (Linux + CUDA 12). Uninstall faiss-cpu first:
+# faiss-gpu-cu12>=1.8.0
