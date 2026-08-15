@@ -17,11 +17,12 @@ Each query allows up to **100** ranked answers. Scoring uses R-Score per answer 
 | Path | Purpose |
 |------|---------|
 | `engine/` | Retrieval: CLIP/ASR encoders, FAISS, keyframe→ASR map, `search()` |
+| `api/` | FastAPI wrapper around `Embedder.search` (`GET /check_health`, `POST /search`) |
 | `preprocessing_tools/` | Offline extract (keyframes/CLIP, Whisper ASR) |
 | `kaggle_script/` | Kaggle / local notebooks (CLIP merge, ASR embed, ASR merge) |
-| `features/` | Local retrieval index (gitignored). Full copy: `C:\AIC2026-media\features\` |
+| `features/` | Local retrieval index (gitignored) |
 
-Set `FEATURES_ROOT` in `.env` to the `features/` directory you search over.
+Set `FEATURES_ROOT` in `.env` to the `features/` directory you search over. Optional: `DEVICE=cpu` or `gpu` (API default `gpu`). Both `engine/` and `api/` read this file.
 
 ## `features/` tree (retrieval index)
 
@@ -52,25 +53,27 @@ features/
     L22/ L23/ L24/ ...
 ```
 
-How rows connect at search time:
+<!-- How rows connect at search time:
 
 1. CLIP FAISS hit `i` → `clip/gallery_map.csv` → `video_id` + local keyframe row.
 2. `maps/VIDEO_ID.csv` local row → `pts_time`, `frame_idx` (submission id).
 3. `asr_emb/gallery_map.csv` → slice of `asr_emb/embeddings.npy` for that video.
 4. JSONL `start`/`end` vs `pts_time` (distance &lt; 3s) → ASR rows to score.
 
-`n_rows` in CLIP map = keyframes. `n_rows` in ASR map = speech segments (not the same count).
+`n_rows` in CLIP map = keyframes. `n_rows` in ASR map = speech segments (not the same count). -->
 
 ## Status
 
 - Offline: CLIP gallery + FAISS, Whisper segments, MiniLM ASR embeddings + maps.
 - Online: `engine.Embedder.search` — visual top-k pool, ASR max-cosine on that pool, weighted sum, rerank. OCR later.
+- HTTP: [`api/README.md`](api/README.md)
 
 ## Quick start
 
 ```bash
 python -m venv .venv
 .venv/Scripts/pip install -r requirements.txt
-# FEATURES_ROOT=.../features  in .env
+# .env: FEATURES_ROOT=.../features  and optional DEVICE=cpu|gpu
 python -m engine.Embedder
+uvicorn api.app:app --host 127.0.0.1 --port 8000
 ```

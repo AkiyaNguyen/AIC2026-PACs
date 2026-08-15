@@ -37,9 +37,9 @@ Organize into the retrieval layout (`features/clip/Lxx/`, `features/maps/`) via 
 ## ASR transcript extract
 
 ```bash
-pip install -r requirements-asr.txt   # faster-whisper; ffmpeg on PATH
+pip install -r preprocessing_tools/requirements-asr.txt   # faster-whisper; ffmpeg on PATH
 
-python -m tools.extract_transcript /path/to/Videos_L21 \
+python -m preprocessing_tools.extract_transcript /path/to/Videos_L21 \
   --audio-dir features/audio/L21 \
   --out-dir features/asr/L21 \
   --device gpu
@@ -47,4 +47,4 @@ python -m tools.extract_transcript /path/to/Videos_L21 \
 
 Writes `VIDEO_ID.jsonl` segments `{start, end, text}`. Model is fixed **`large-v3`**. Kaggle: [`kaggle_script/asr_extraction.ipynb`](../kaggle_script/asr_extraction.ipynb).
 
-ASR **segment embeddings**: [`kaggle_script/asr_embed_extraction.ipynb`](../kaggle_script/asr_embed_extraction.ipynb) → `features/asr_emb/` (`requirements-asr-embed.txt`).
+ASR **segment embeddings** use root [`requirements.txt`](../requirements.txt) (`sentence-transformers`): [`kaggle_script/asr_embed_extraction.ipynb`](../kaggle_script/asr_embed_extraction.ipynb) → `features/asr_emb/`.

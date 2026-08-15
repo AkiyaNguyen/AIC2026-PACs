@@ -8,3 +8,8 @@ matplotlib>=3.7
 faiss-cpu>=1.8.0
 # GPU (Linux + CUDA 12). Uninstall faiss-cpu first:
 # faiss-gpu-cu12>=1.8.0
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-dotenv>=1.0.0
+# ASR query encode + asr_emb gallery (same MiniLM as offline embed notebooks)
+sentence-transformers>=3.0.0

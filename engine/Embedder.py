@@ -161,8 +161,12 @@ class Embedder:
         maps_dir = root / "maps"
         asr_dir = root / "asr_emb"
 
-        video_ids: list[str] = []
-        pts_list: list[float] = []
+        self.row_index_map_info = {
+            "video_ids": [],  # i_th row of index matrix is from video_ids[i]
+            "pts_list": [],  # i_th row of index matrix is at pts_list[i] seconds
+            "frame_idx_list": [],  # i_th row of index matrix is at frame_idx_list[i]
+            "row_to_idx_in_each_video": [],  # map clip_row -> index of keyframe in such video
+        }
         n_clip = 0
         for row in clip_map:
             video_id = row["video_id"]
@@ -171,20 +175,25 @@ class Embedder:
             if not map_csv.is_file():
                 raise FileNotFoundError(f"Missing keyframe map: {map_csv}")
             with map_csv.open(encoding="utf-8", newline="") as f:
-                pts = [float(r["pts_time"]) for r in csv.DictReader(f)]
-            if len(pts) < n:
+                map_rows = list(csv.DictReader(f))
+            pts = [float(r["pts_time"]) for r in map_rows]
+            frame_idx = [int(r["frame_idx"]) for r in map_rows]
+            if len(pts) < n or len(frame_idx) < n:
                 raise ValueError(
-                    f"{video_id}: map.csv has {len(pts)} rows, clip gallery n_rows={n}"
+                    f"{video_id}: map.csv has {len(pts)} pts / {len(frame_idx)} "
+                    f"frame_idx, clip gallery n_rows={n}"
                 )
-            video_ids.extend([video_id] * n)
-            pts_list.extend(pts[:n])
+            self.row_index_map_info["video_ids"].extend([video_id] * n)
+            self.row_index_map_info["pts_list"].extend(pts[:n])
+            self.row_index_map_info["frame_idx_list"].extend(frame_idx[:n])
+            self.row_index_map_info["row_to_idx_in_each_video"].extend(list(range(n)))
             n_clip += n
 
         assert n_clip == self.clip_index.ntotal, \
             f"clip gallery_map covers {n_clip} rows, FAISS ntotal={self.clip_index.ntotal}"
-
-        self.clip_video_id = video_ids # i_th row of index matrix is from video_ids[i]
-        self.clip_pts = np.asarray(pts_list, dtype=np.float32) # i_th row of index matrix is at pts_list[i] seconds
+        self.row_index_map_info["pts_list"] = np.asarray(
+            self.row_index_map_info["pts_list"], dtype=np.float32
+        )
 
         asr_by_video: dict[str, tuple[int, np.ndarray, np.ndarray]] = {}
         for row in asr_map:
@@ -212,7 +221,7 @@ class Embedder:
         weight_clip: float = 0.8,
         weight_asr: float = 0.2,
         delta: float = 3.0,
-    ) -> list[tuple[float, int]]:
+    ) -> list[dict]:
         embed_for_clip = self.clip_encoder.encode_query(query)
         embed_for_asr = self.asr_encoder.encode_query(query)
 
@@ -225,24 +234,36 @@ class Embedder:
 
         row_lists = asr_rows_for_clip_rows(
             clip_rows,
-            self.clip_video_id,
-            self.clip_pts,
+            self.row_index_map_info["video_ids"],
+            self.row_index_map_info["pts_list"],
             self.asr_by_video,
             delta=delta,
         )
         ra = max_asr_scores(embed_for_asr, self.asr_embed_mat, row_lists)
         total = weight_clip * visual + weight_asr * ra
         order = np.argsort(-total)[:num_results]
-        return [(float(total[i]), int(clip_rows[i])) for i in order]
+
+        ## return {score, video_id, pts_time, row_idx_in_video, frame_idx}
+        return [{
+            "score": float(total[i]),
+            "clip_row": int(clip_rows[i]),
+            "video_id": self.row_index_map_info["video_ids"][clip_rows[i]],
+            "pts_time": float(self.row_index_map_info["pts_list"][clip_rows[i]]),
+            "row_idx_in_video": int(self.row_index_map_info["row_to_idx_in_each_video"][clip_rows[i]]),
+            "frame_idx": int(self.row_index_map_info["frame_idx_list"][clip_rows[i]]),
+        } for i in order]
+
 
 if __name__ == "__main__":
     embedder = Embedder(device="cpu")
     print("FEATURES_ROOT", get_features_root())
     print("clip ntotal", embedder.clip_index.ntotal, "d", embedder.clip_index.d)
     print("asr_mat", embedder.asr_embed_mat.shape)
-    print("clip meta rows", len(embedder.clip_video_id), "asr videos", len(embedder.asr_by_video))
-    assert len(embedder.clip_video_id) == embedder.clip_index.ntotal
-    assert embedder.clip_pts.shape[0] == embedder.clip_index.ntotal
+    n_meta = len(embedder.row_index_map_info["video_ids"])
+    print("clip meta rows", n_meta, "asr videos", len(embedder.asr_by_video))
+    assert n_meta == embedder.clip_index.ntotal
+    assert len(embedder.row_index_map_info["frame_idx_list"]) == n_meta
+    assert embedder.row_index_map_info["pts_list"].shape[0] == n_meta
 
     query = "chương trình 60 giây đài truyền hình thành phố Hồ Chí Minh"
     print("\nQuery:", query)
@@ -255,17 +276,21 @@ if __name__ == "__main__":
     )
 
     print("\n#  mixed (0.8 clip + 0.2 asr)")
-    for rank, (score, clip_row) in enumerate(mixed, start=1):
-        vid = embedder.clip_video_id[clip_row]
-        pts = float(embedder.clip_pts[clip_row])
-        print(f"  {rank:2d}  score={score:.4f}  {vid}  pts={pts:.2f}s  clip_row={clip_row}")
+    for rank, hit in enumerate(mixed, start=1):
+        print(
+            f"  {rank:2d}  score={hit['score']:.4f}  {hit['video_id']}  "
+            f"pts={hit['pts_time']:.2f}s  frame_idx={hit['frame_idx']}  "
+            f"clip_row={hit['clip_row']}"
+        )
 
     print("\n#  visual only (w_asr=0)")
-    for rank, (score, clip_row) in enumerate(visual_only, start=1):
-        vid = embedder.clip_video_id[clip_row]
-        pts = float(embedder.clip_pts[clip_row])
-        print(f"  {rank:2d}  score={score:.4f}  {vid}  pts={pts:.2f}s  clip_row={clip_row}")
+    for rank, hit in enumerate(visual_only, start=1):
+        print(
+            f"  {rank:2d}  score={hit['score']:.4f}  {hit['video_id']}  "
+            f"pts={hit['pts_time']:.2f}s  frame_idx={hit['frame_idx']}  "
+            f"clip_row={hit['clip_row']}"
+        )
 
-    mixed_ids = [r for _, r in mixed]
-    vis_ids = [r for _, r in visual_only]
+    mixed_ids = [hit["clip_row"] for hit in mixed]
+    vis_ids = [hit["clip_row"] for hit in visual_only]
     print("\norder changed vs visual-only:", mixed_ids != vis_ids)
