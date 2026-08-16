@@ -186,7 +186,7 @@ class Embedder:
             self.row_index_map_info["video_ids"].extend([video_id] * n)
             self.row_index_map_info["pts_list"].extend(pts[:n])
             self.row_index_map_info["frame_idx_list"].extend(frame_idx[:n])
-            self.row_index_map_info["row_to_idx_in_each_video"].extend(list(range(n)))
+            self.row_index_map_info["row_to_idx_in_each_video"].extend(list(range(n))) # zero idx
             n_clip += n
 
         assert n_clip == self.clip_index.ntotal, \

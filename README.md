@@ -19,7 +19,7 @@ Each query allows up to **100** ranked answers. Scoring uses R-Score per answer 
 | `engine/` | Retrieval: CLIP/ASR encoders, FAISS, keyframe→ASR map, `search()` |
 | `api/` | FastAPI wrapper around `Embedder.search` (`GET /check_health`, `POST /search`) |
 | `preprocessing_tools/` | Offline extract (keyframes/CLIP, Whisper ASR) |
-| `kaggle_script/` | Kaggle / local notebooks (CLIP merge, ASR embed, ASR merge) |
+| `kaggle_script/` | Kaggle / local notebooks (CLIP merge, ASR embed, ASR merge, SigLIP2 embed) |
 | `features/` | Local retrieval index (gitignored) |
 
 Set `FEATURES_ROOT` in `.env` to the `features/` directory you search over. Optional: `DEVICE=cpu` or `gpu` (API default `gpu`). Both `engine/` and `api/` read this file.

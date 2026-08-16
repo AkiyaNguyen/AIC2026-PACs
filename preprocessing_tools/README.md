@@ -30,7 +30,7 @@ python -m tools.extract_features embed /kaggle/working/keyframes-out \
 
 Extract walks the input folder recursively. Output is **flat** `keyframes-out/VIDEO_ID/...` (not a mirror of `Videos_L21_a/`). Embed `--copy-embeddings` writes `clip-gallery/VIDEO_ID.npy`.
 
-Organize into the retrieval layout (`features/clip/Lxx/`, `features/maps/`) via the Kaggle notebook [`kaggle_script/kf_embed_extraction.ipynb`](../kaggle_script/kf_embed_extraction.ipynb), or equivalent local scripts. Pipeline overview: [`docs/memory/pipeline.md`](../docs/memory/pipeline.md).
+Organize into the retrieval layout (`features/clip/Lxx/`, `features/maps/`) via the Kaggle notebook [`kaggle_script/kf_embed_extraction.ipynb`](../kaggle_script/kf_embed_extraction.ipynb), or equivalent local scripts. Second visual gallery (same stills): [`kaggle_script/siglip2_embed_extraction.ipynb`](../kaggle_script/siglip2_embed_extraction.ipynb) → `features/siglip/`. Pipeline overview: [`docs/memory/pipeline.md`](../docs/memory/pipeline.md).
 
 ---
 
