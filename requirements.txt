@@ -11,5 +11,7 @@ faiss-cpu>=1.8.0
 fastapi>=0.115.0
 uvicorn>=0.32.0
 python-dotenv>=1.0.0
+# CLIP + SigLIP2 query towers (CLIP was already imported; pin a SigLIP2-capable floor)
+transformers>=4.49.0
 # ASR query encode + asr_emb gallery (same MiniLM as offline embed notebooks)
 sentence-transformers>=3.0.0

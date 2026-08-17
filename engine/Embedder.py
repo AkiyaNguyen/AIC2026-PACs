@@ -2,16 +2,23 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from pathlib import Path
 
 import faiss
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
-from transformers import CLIPModel, CLIPProcessor
+from transformers import AutoModel, AutoProcessor, CLIPModel, CLIPProcessor
 
 from engine.config import get_features_root
-from engine.utils import asr_rows_for_clip_rows, get_proper_device, max_asr_scores
+from engine.utils import (
+    asr_rows_for_clip_rows,
+    get_proper_device,
+    max_asr_scores,
+    mix_scores,
+    rrf_union,
+)
 
 def _load_gallery_map(path: Path) -> list[dict[str, str]]:
     if not path.is_file():
@@ -20,6 +27,7 @@ def _load_gallery_map(path: Path) -> list[dict[str, str]]:
         )
     with path.open(encoding="utf-8", newline="") as f:
         return list(csv.DictReader(f))
+
 
 def _read_asr_intervals(path: Path) -> tuple[np.ndarray, np.ndarray]:
     starts, ends = [], []
@@ -32,20 +40,61 @@ def _read_asr_intervals(path: Path) -> tuple[np.ndarray, np.ndarray]:
         ends.append(float(obj["end"]))
     return np.asarray(starts, dtype=np.float32), np.asarray(ends, dtype=np.float32)
 
+
+def _read_faiss(path: Path, expected_dim: int) -> faiss.Index:
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing FAISS index: {path}")
+    index = faiss.read_index(str(path))
+    if index.d != expected_dim:
+        raise ValueError(f"Expected index dim {expected_dim}, got {index.d} ({path})")
+    return index
+
+
+def _gallery_map_signature(rows: list[dict[str, str]]) -> list[tuple[str, int]]:
+    return [(r["video_id"], int(r["n_rows"])) for r in rows]
+
+
+def _as_embed_tensor(out) -> torch.Tensor:
+    """HF CLIP / SigLIP2: tensor, or BaseModelOutputWithPooling."""
+    if torch.is_tensor(out):
+        return out
+    for attr in ("pooler_output", "text_embeds", "image_embeds"):
+        pooled = getattr(out, attr, None)
+        if pooled is not None:
+            return pooled
+    raise TypeError(f"Unexpected text features type: {type(out)}")
+
+
+def _hf_query_features(model, device: torch.device, inputs, normalize: bool) -> np.ndarray:
+    tensor_inputs = {
+        k: v.to(device) for k, v in inputs.items() if torch.is_tensor(v)
+    }
+    with torch.no_grad():
+        feat = _as_embed_tensor(model.get_text_features(**tensor_inputs))
+        if normalize:
+            feat = feat / feat.norm(dim=-1, keepdim=True).clamp_min(1e-12)
+        return feat.cpu().numpy().astype(np.float32)
+
+
 # Hard-coded for now
 CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
 CLIP_DIM = 512
+SIGLIP_MODEL_ID = "google/siglip2-so400m-patch16-256"
+SIGLIP_DIM = 1152
+SIGLIP_TEXT_MAX_LENGTH = 64
 ASR_MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 ASR_DIM = 384
+RRF_K = 60
 
+#--------------------------------
 
-class CLIPQueryEncoder:
-    """CLIP text tower only. Does not own the FAISS index."""
+class ClipTextQueryEncoder:
+    """CLIP text tower. Variable-length padding (CLIP training contract)."""
 
     def __init__(
         self,
-        model: CLIPModel,
-        processor: CLIPProcessor,
+        model,
+        processor,
         device: torch.device,
         normalize_embeddings: bool = True,
     ):
@@ -55,20 +104,40 @@ class CLIPQueryEncoder:
         self.normalize_embeddings = normalize_embeddings
 
     def encode_query(self, query: str) -> np.ndarray:
-        inputs = self.processor(text=[query], return_tensors="pt", padding=True)
-        input_ids = inputs["input_ids"].to(self.device)
-        attention_mask = inputs.get("attention_mask")
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(self.device)
-        with torch.no_grad():
-            out = self.model.get_text_features(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-            )
-            feat = out.pooler_output if hasattr(out, "pooler_output") else out
-            if self.normalize_embeddings:
-                feat = feat / feat.norm(dim=-1, keepdim=True).clamp_min(1e-12)
-            return feat.cpu().numpy().astype(np.float32)
+        inputs = self.processor(
+            text=[query], return_tensors="pt", padding=True, truncation=True
+        )
+        return _hf_query_features(
+            self.model, self.device, inputs, self.normalize_embeddings
+        )
+
+
+class Siglip2TextQueryEncoder:
+    """SigLIP2 text tower. Fixed 64-token pad (training-time preprocess)."""
+
+    def __init__(
+        self,
+        model,
+        processor,
+        device: torch.device,
+        normalize_embeddings: bool = True,
+    ):
+        self.model = model
+        self.processor = processor
+        self.device = device
+        self.normalize_embeddings = normalize_embeddings
+
+    def encode_query(self, query: str) -> np.ndarray:
+        inputs = self.processor(
+            text=[query],
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=SIGLIP_TEXT_MAX_LENGTH,
+        )
+        return _hf_query_features(
+            self.model, self.device, inputs, self.normalize_embeddings
+        )
 
 
 class ASRQueryEncoder:
@@ -95,35 +164,75 @@ class ASRQueryEncoder:
 
 
 class Embedder:
-    """Load-once: CLIP encoder + full FAISS index; ASR encoder + segment matrix.
+    """Load-once: CLIP + SigLIP2 FAISS; ASR encoder + segment matrix.
 
-    Search (later): CLIP over the whole index; ASR only among CLIP candidates.
-    No shared ABC — both encoders just implement encode_query().
+    Search: two visual ANN → RRF union pool; ASR only inside that pool; min-max mix.
+    Encoders implement encode_query(); no shared ABC with ASR.
     """
 
     def __init__(self, device: str = "gpu"):
         self.device = get_proper_device(device)
         self.clip_encoder, self.clip_index = self._load_clip()
+        self.siglip_encoder, self.siglip_index = self._load_siglip()
         self.asr_encoder, self.asr_embed_mat = self._load_asr()
         self._load_keyframe_asr_maps()
+        self._assert_siglip_and_clip_aligned()
 
-    def _load_clip(self) -> tuple[CLIPQueryEncoder, faiss.Index]:
+    def _load_visual(
+        self,
+        gallery_dir: Path,
+        model_id: str,
+        dim: int,
+        model_cls,
+        processor_cls,
+        encoder_cls,
+    ):
+        model = model_cls.from_pretrained(model_id).to(self.device).eval()
+        processor = processor_cls.from_pretrained(model_id)
+        encoder = encoder_cls(
+            model, processor, self.device, normalize_embeddings=True
+        )
+        index = _read_faiss(gallery_dir / "index.faiss", dim)
+        return encoder, index
+
+    def _load_clip(self) -> tuple[ClipTextQueryEncoder, faiss.Index]:
         clip_dir = get_features_root() / "clip"
         if not clip_dir.is_dir():
             raise FileNotFoundError(f"Features root missing clip/: {clip_dir}")
+        return self._load_visual(
+            clip_dir,
+            CLIP_MODEL_ID,
+            CLIP_DIM,
+            CLIPModel,
+            CLIPProcessor,
+            ClipTextQueryEncoder,
+        )
 
-        model = CLIPModel.from_pretrained(CLIP_MODEL_ID).to(self.device).eval()
-        processor = CLIPProcessor.from_pretrained(CLIP_MODEL_ID)
-        encoder = CLIPQueryEncoder(model, processor, self.device, normalize_embeddings=True)
+    def _load_siglip(self) -> tuple[Siglip2TextQueryEncoder, faiss.Index]:
+        sig_dir = get_features_root() / "SigLIP2"
+        if not sig_dir.is_dir():
+            raise FileNotFoundError(f"Features root missing SigLIP2/: {sig_dir}")
+        return self._load_visual(
+            sig_dir,
+            SIGLIP_MODEL_ID,
+            SIGLIP_DIM,
+            AutoModel,
+            AutoProcessor,
+            Siglip2TextQueryEncoder,
+        )
 
-        index_path = clip_dir / "index.faiss"
-        if not index_path.is_file():
-            raise FileNotFoundError(f"Missing CLIP FAISS index: {index_path}")
-        index = faiss.read_index(str(index_path))
-        if index.d != CLIP_DIM:
-            raise ValueError(f"Expected CLIP index dim {CLIP_DIM}, got {index.d}")
-
-        return encoder, index
+    def _assert_siglip_and_clip_aligned(self) -> None:
+        if self.siglip_index.ntotal != self.clip_index.ntotal:
+            raise ValueError(
+                f"SigLIP2 ntotal={self.siglip_index.ntotal} != "
+                f"CLIP ntotal={self.clip_index.ntotal}"
+            )
+        clip_map = _load_gallery_map(get_features_root() / "clip" / "gallery_map.csv")
+        sig_map = _load_gallery_map(get_features_root() / "SigLIP2" / "gallery_map.csv")
+        if _gallery_map_signature(clip_map) != _gallery_map_signature(sig_map):
+            raise ValueError(
+                "SigLIP2 gallery_map does not match CLIP (video_id, n_rows order)"
+            )
 
     def _load_asr(self) -> tuple[ASRQueryEncoder, np.ndarray]:
         asr_dir = get_features_root() / "asr_emb"
@@ -213,6 +322,17 @@ class Embedder:
             asr_by_video[video_id] = (start_row, starts, ends)
         self.asr_by_video = asr_by_video # map vid_name -> (start_row, list n of starts, list n of ends)
 
+    def _ann(
+        self,
+        encoder: ClipTextQueryEncoder | Siglip2TextQueryEncoder,
+        index: faiss.Index,
+        query: str,
+        k: int,
+    ) -> np.ndarray:
+        q = encoder.encode_query(query)
+        _scores, ids = index.search(np.ascontiguousarray(q.astype(np.float32)), k)
+        return ids[0]
+
     def search(
         self,
         query: str,
@@ -222,42 +342,44 @@ class Embedder:
         weight_asr: float = 0.2,
         delta: float = 3.0,
     ) -> list[dict]:
-        embed_for_clip = self.clip_encoder.encode_query(query)
-        embed_for_asr = self.asr_encoder.encode_query(query)
-
         k = min(num_candidates, self.clip_index.ntotal)
-        sv, ids = self.clip_index.search(
-            np.ascontiguousarray(embed_for_clip.astype(np.float32)), k
-        )
-        clip_rows = ids[0]
-        visual = sv[0]
+        clip_ids = self._ann(self.clip_encoder, self.clip_index, query, k)
+        sig_ids = self._ann(self.siglip_encoder, self.siglip_index, query, k)
+        union_rows, s_vis = rrf_union(clip_ids, sig_ids, k=RRF_K)
 
         row_lists = asr_rows_for_clip_rows(
-            clip_rows,
+            union_rows,
             self.row_index_map_info["video_ids"],
             self.row_index_map_info["pts_list"],
             self.asr_by_video,
             delta=delta,
         )
-        ra = max_asr_scores(embed_for_asr, self.asr_embed_mat, row_lists)
-        total = weight_clip * visual + weight_asr * ra
+        ra = max_asr_scores(
+            self.asr_encoder.encode_query(query), self.asr_embed_mat, row_lists
+        )
+        total = mix_scores(s_vis, ra, weight_clip, weight_asr)
         order = np.argsort(-total)[:num_results]
 
         ## return {score, video_id, pts_time, row_idx_in_video, frame_idx}
         return [{
             "score": float(total[i]),
-            "clip_row": int(clip_rows[i]),
-            "video_id": self.row_index_map_info["video_ids"][clip_rows[i]],
-            "pts_time": float(self.row_index_map_info["pts_list"][clip_rows[i]]),
-            "row_idx_in_video": int(self.row_index_map_info["row_to_idx_in_each_video"][clip_rows[i]]),
-            "frame_idx": int(self.row_index_map_info["frame_idx_list"][clip_rows[i]]),
+            "clip_row": int(union_rows[i]),
+            "video_id": self.row_index_map_info["video_ids"][union_rows[i]],
+            "pts_time": float(self.row_index_map_info["pts_list"][union_rows[i]]),
+            "row_idx_in_video": int(self.row_index_map_info["row_to_idx_in_each_video"][union_rows[i]]),
+            "frame_idx": int(self.row_index_map_info["frame_idx_list"][union_rows[i]]),
         } for i in order]
 
 
 if __name__ == "__main__":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     embedder = Embedder(device="cpu")
     print("FEATURES_ROOT", get_features_root())
     print("clip ntotal", embedder.clip_index.ntotal, "d", embedder.clip_index.d)
+    print("siglip ntotal", embedder.siglip_index.ntotal, "d", embedder.siglip_index.d)
     print("asr_mat", embedder.asr_embed_mat.shape)
     n_meta = len(embedder.row_index_map_info["video_ids"])
     print("clip meta rows", n_meta, "asr videos", len(embedder.asr_by_video))
@@ -275,22 +397,23 @@ if __name__ == "__main__":
         query, num_candidates=50, num_results=10, weight_clip=1.0, weight_asr=0.0
     )
 
-    print("\n#  mixed (0.8 clip + 0.2 asr)")
+    print("\n#  mixed (0.8 visual RRF + 0.2 asr)")
     for rank, hit in enumerate(mixed, start=1):
         print(
             f"  {rank:2d}  score={hit['score']:.4f}  {hit['video_id']}  "
-            f"pts={hit['pts_time']:.2f}s  frame_idx={hit['frame_idx']}  "
-            f"clip_row={hit['clip_row']}"
+            f"kf={hit['row_idx_in_video']}  pts={hit['pts_time']:.2f}s  "
+            f"frame_idx={hit['frame_idx']}  clip_row={hit['clip_row']}"
         )
 
     print("\n#  visual only (w_asr=0)")
     for rank, hit in enumerate(visual_only, start=1):
         print(
             f"  {rank:2d}  score={hit['score']:.4f}  {hit['video_id']}  "
-            f"pts={hit['pts_time']:.2f}s  frame_idx={hit['frame_idx']}  "
-            f"clip_row={hit['clip_row']}"
+            f"kf={hit['row_idx_in_video']}  pts={hit['pts_time']:.2f}s  "
+            f"frame_idx={hit['frame_idx']}  clip_row={hit['clip_row']}"
         )
 
     mixed_ids = [hit["clip_row"] for hit in mixed]
     vis_ids = [hit["clip_row"] for hit in visual_only]
     print("\norder changed vs visual-only:", mixed_ids != vis_ids)
+    print("mixed pool unique clip_rows in top-10:", len(set(mixed_ids)))

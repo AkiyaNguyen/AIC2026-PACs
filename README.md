@@ -26,46 +26,52 @@ Set `FEATURES_ROOT` in `.env` to the `features/` directory you search over. Opti
 
 ## `features/` tree (retrieval index)
 
-Working set is usually **L21–L24**. Same layout for the full corpus on the media drive.
+Set `FEATURES_ROOT` to this directory. Full corpus on the media drive is L21–L30; a smaller working set may omit later batches.
 
 ```text
 features/
-  clip/
-    model.json                 # CLIP id / dim (ViT-B-32, dim 512)
-    embeddings.npy             # concatenated keyframe vectors (N_clip, 512)
-    gallery_map.csv            # video_id, start_row, n_rows  (into embeddings / FAISS)
-    index.faiss                # IndexFlatIP over embeddings.npy (row i = FAISS id i)
+  clip/                        # required — CLIP FAISS (dim 512)
+    model.json
+    embeddings.npy             # (N_kf, 512) row i = FAISS id i
+    gallery_map.csv            # video_id, start_row, n_rows
+    index.faiss                # IndexFlatIP
     L21/
-      L21_V001.npy             # (N_frames, 512) one video; rows align with maps CSV
+      L21_V001.npy             # (N_frames, 512); rows align with maps CSV
       ...
-    L22/ L23/ L24/ ...
-  maps/
-    L21_V001.csv               # per keyframe: frame_idx, pts_time, fps, ...
-    ...                        # row k of this CSV = row k of clip/Lxx/VIDEO_ID.npy
-  asr_emb/
+    L22/ ... L30/
+  SigLIP2/                     # required — 2nd visual FAISS (dim 1152); same rows as clip/
+    model.json
+    embeddings.npy
+    gallery_map.csv
+    index.faiss
+    L21/
+      L21_V001.npy             # (N_frames, 1152)
+      ...
+    L22/ ... L30/
+  maps/                        # required — one CSV per video (flat)
+    L21_V001.csv               # n, pts_time, fps, frame_idx
+    ...                        # row k = clip/Lxx/VIDEO_ID.npy row k = SigLIP2 row k
+  asr_emb/                     # required when weight_asr > 0
     model.json                 # MiniLM id / dim 384 / normalize
-    embeddings.npy             # concatenated segment vectors (N_seg, 384)
-    gallery_map.csv            # video_id, start_row, n_rows  (into embeddings.npy)
+    embeddings.npy             # (N_seg, 384)
+    gallery_map.csv            # video_id, start_row, n_rows
     L21/
       L21_V001.npy             # (N_seg, 384)
       L21_V001.jsonl           # {start, end, text} — line i ↔ npy row i
       ...
-    L22/ L23/ L24/ ...
+    L22/ ... L30/
+  asr/                         # optional at query if asr_emb jsonl is present
+    L21/
+      L21_V001.jsonl           # Whisper {start, end, text}
+      ...
 ```
 
-<!-- How rows connect at search time:
-
-1. CLIP FAISS hit `i` → `clip/gallery_map.csv` → `video_id` + local keyframe row.
-2. `maps/VIDEO_ID.csv` local row → `pts_time`, `frame_idx` (submission id).
-3. `asr_emb/gallery_map.csv` → slice of `asr_emb/embeddings.npy` for that video.
-4. JSONL `start`/`end` vs `pts_time` (distance &lt; 3s) → ASR rows to score.
-
-`n_rows` in CLIP map = keyframes. `n_rows` in ASR map = speech segments (not the same count). -->
+Search uses `clip/` + `SigLIP2/` + `maps/` always; `asr_emb/` when mixing ASR. `clip_row` is shared across CLIP and SigLIP2. `n_rows` in CLIP/SigLIP2 maps = keyframes; in ASR map = speech segments.
 
 ## Status
 
-- Offline: CLIP gallery + FAISS, Whisper segments, MiniLM ASR embeddings + maps.
-- Online: `engine.Embedder.search` — visual top-k pool, ASR max-cosine on that pool, weighted sum, rerank. OCR later.
+- Offline: CLIP + SigLIP2 galleries + FAISS, Whisper segments, MiniLM ASR embeddings + maps.
+- Online: `engine.Embedder.search` — CLIP+SigLIP2 ANN, RRF union pool, ASR max-cosine on that pool, min-max mix, rerank. OCR later.
 - HTTP: [`api/README.md`](api/README.md)
 
 ## Quick start

@@ -82,19 +82,79 @@ def max_asr_scores(
     return scores
 
 
-# def minmax_norm(values: np.ndarray) -> np.ndarray:
-#     """Map to [0, 1] over the pool. All-equal → zeros (no fake spread)."""
-#     raise NotImplementedError
+def minmax_norm(values: np.ndarray) -> np.ndarray:
+    """Map to [0, 1] over the pool. All-equal -> zeros"""
+    x = np.asarray(values, dtype=np.float32).reshape(-1)
+    if x.size == 0:
+        return x
+    lo = float(np.min(x))
+    hi = float(np.max(x))
+    if hi - lo < 1e-12:
+        return np.zeros_like(x)
+    return (x - lo) / (hi - lo)
 
 
-# def mix_scores(
-#     s_visual: np.ndarray,
-#     r_asr: np.ndarray,
-#     r_ocr: np.ndarray | None,
-#     w_visual: float,
-#     w_asr: float,
-#     w_ocr: float = 0.0,
-# ) -> np.ndarray:
-#     """Renorm weights to sum 1; weighted sum of min-max'd channels."""
-#     raise NotImplementedError
+def mix_scores(
+    s_visual: np.ndarray,
+    r_asr: np.ndarray,
+    w_visual: float,
+    w_asr: float,
+    r_ocr: np.ndarray | None = None,
+    w_ocr: float = 0.0,
+) -> np.ndarray:
+    """Drop zero-weight channels; renorm remaining to 1; min-max then weighted sum."""
+    n = np.asarray(s_visual, dtype=np.float32).reshape(-1).shape[0]
+    acc = np.zeros(n, dtype=np.float32)
+    parts: list[np.ndarray] = []
+    weights: list[float] = []
+    if w_visual > 0:
+        parts.append(minmax_norm(s_visual))
+        weights.append(float(w_visual))
+    if w_asr > 0:
+        parts.append(minmax_norm(r_asr))
+        weights.append(float(w_asr))
+    if w_ocr > 0 and r_ocr is not None:
+        parts.append(minmax_norm(r_ocr))
+        weights.append(float(w_ocr))
+    if not parts:
+        return acc
+    wsum = float(sum(weights))
+    for part, w in zip(parts, weights):
+        acc += (w / wsum) * part # Normalize the weights to sum = 1
+    return acc
+
+
+def rrf_union(
+    clip_ids: np.ndarray,
+    sig_ids: np.ndarray,
+    k: int = 60,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    [2,3,5], [5,7,3] -> [2,3,5,7]
+    then return ids [2,3,5,7] 
+    and score of [candidates 2, candidates 3, candidates 5, candidates 7] 
+    for example
+    """
+    scores: dict[int, float] = {}
+    union: list[int] = []
+
+    def add(ids: np.ndarray) -> None:
+        seen: set[int] = set()
+        for rank, row in enumerate(np.asarray(ids, dtype=np.int64).reshape(-1), start=1):
+            row = int(row)
+            if row < 0 or row in seen:
+                continue
+            seen.add(row)
+            if row not in scores:
+                union.append(row)
+                scores[row] = 0.0
+            scores[row] += 1.0 / (k + rank)
+
+    add(clip_ids)
+    add(sig_ids)
+    out = np.asarray(union, dtype=np.int64)
+    s = np.empty(len(union), dtype=np.float32)
+    for i, row in enumerate(union):
+        s[i] = scores[row]
+    return out, s
 

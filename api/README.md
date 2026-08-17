@@ -13,6 +13,8 @@ DEVICE=cpu
 
 `DEVICE` is optional (`cpu` | `gpu`; default `gpu`).
 
+`POST /search` field `weight_clip` is the **visual** weight \(w_v\) on min-max’d RRF (CLIP + SigLIP2 ranks), not raw CLIP cosine. `weight_asr` is \(w_a\) after min-max on the same pool. Both `FEATURES_ROOT/clip` and `FEATURES_ROOT/SigLIP2` are required.
+
 ## Run
 
 ```bash
