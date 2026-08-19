@@ -17,7 +17,7 @@ Each query allows up to **100** ranked answers. Scoring uses R-Score per answer 
 | Path | Purpose |
 |------|---------|
 | `engine/` | Retrieval: CLIP/ASR encoders, FAISS, keyframe→ASR map, `search()` |
-| `api/` | FastAPI wrapper around `Embedder.search` (`GET /check_health`, `POST /search`) |
+| `api/` | FastAPI wrapper around `SearchService.search` (`GET /check_health`, `POST /search`) |
 | `preprocessing_tools/` | Offline extract (keyframes/CLIP, Whisper ASR) |
 | `kaggle_script/` | Kaggle / local notebooks (CLIP merge, ASR embed, ASR merge, SigLIP2 embed) |
 | `features/` | Local retrieval index (gitignored) |
@@ -51,7 +51,7 @@ features/
   maps/                        # required — one CSV per video (flat)
     L21_V001.csv               # n, pts_time, fps, frame_idx
     ...                        # row k = clip/Lxx/VIDEO_ID.npy row k = SigLIP2 row k
-  asr_emb/                     # required when weight_asr > 0
+  asr_emb/                     # required when weight_transcript > 0
     model.json                 # MiniLM id / dim 384 / normalize
     embeddings.npy             # (N_seg, 384)
     gallery_map.csv            # video_id, start_row, n_rows
@@ -71,7 +71,7 @@ Search uses `clip/` + `SigLIP2/` + `maps/` always; `asr_emb/` when mixing ASR. `
 ## Status
 
 - Offline: CLIP + SigLIP2 galleries + FAISS, Whisper segments, MiniLM ASR embeddings + maps.
-- Online: `engine.Embedder.search` — CLIP+SigLIP2 ANN, RRF union pool, ASR max-cosine on that pool, min-max mix, rerank. OCR later.
+- Online: `SearchService` + `HybridSearcher` — visual RRF + BM25/semantic text candidates, union pool, weighted fusion. See `engine/search/`.
 - HTTP: [`api/README.md`](api/README.md)
 
 ## Quick start
@@ -80,6 +80,6 @@ Search uses `clip/` + `SigLIP2/` + `maps/` always; `asr_emb/` when mixing ASR. `
 python -m venv .venv
 .venv/Scripts/pip install -r requirements.txt
 # .env: FEATURES_ROOT=.../features  and optional DEVICE=cpu|gpu
-python -m engine.Embedder
+python -m engine.search_service
 uvicorn api.app:app --host 127.0.0.1 --port 8000
 ```

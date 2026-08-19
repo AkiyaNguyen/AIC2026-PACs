@@ -1,6 +1,6 @@
 # Search API
 
-HTTP wrapper for `engine.Embedder.search`. Run from the repo root with `.venv` active.
+HTTP wrapper for `SearchService.search`. Run from the repo root with `.venv` active.
 
 ## `.env`
 
@@ -13,7 +13,43 @@ DEVICE=cpu
 
 `DEVICE` is optional (`cpu` | `gpu`; default `gpu`).
 
-`POST /search` field `weight_clip` is the **visual** weight \(w_v\) on min-max’d RRF (CLIP + SigLIP2 ranks), not raw CLIP cosine. `weight_asr` is \(w_a\) after min-max on the same pool. Both `FEATURES_ROOT/clip` and `FEATURES_ROOT/SigLIP2` are required.
+## `POST /search` body
+
+All fields optional except `query`. Defaults match `engine/search/config.py`.
+
+| Field | Default | Role |
+|-------|---------|------|
+| `query` | — | Natural-language KIS query (required) |
+| `num_results` | `100` | Max ranked hits returned |
+| `weight_visual` | `0.8` | Fusion weight on visual RRF channel |
+| `weight_transcript` | `0.2` | Fusion weight on transcript channel (BM25 + semantic) |
+| `num_candidates_visual` | `500` | ANN top-K per CLIP and SigLIP2 tower |
+| `rrf_k` | `60` | RRF constant for CLIP + SigLIP2 merge |
+| `bm25_top_segments` | `50` | BM25 segment proposals |
+| `sem_top_segments` | `50` | MiniLM semantic segment proposals |
+| `delta` | `1.0` | Keyframe ↔ ASR segment eligibility (seconds) |
+| `segment_min_gap` | `1.0` | Min gap between keyframes sampled per segment |
+| `segment_pad` | `0.5` | Pad around segment interval when mapping to keyframes |
+
+Minimal request:
+
+```json
+{"query": "Xuất khẩu gạo Việt Nam"}
+```
+
+Transcript-heavy tuning example:
+
+```json
+{
+  "query": "Xuất khẩu gạo Việt Nam",
+  "weight_visual": 0.3,
+  "weight_transcript": 0.7,
+  "bm25_top_segments": 80,
+  "delta": 1.5
+}
+```
+
+Both `FEATURES_ROOT/clip` and `FEATURES_ROOT/SigLIP2` are required for visual search. Transcript fields need `asr/`, `asr_emb/`, and Whisper JSONL under `asr/`.
 
 ## Run
 

@@ -1,13 +1,49 @@
 from pydantic import BaseModel, Field
 
+from engine.search.config import RRF_K, SearchConfig
+
 
 class SearchRequest(BaseModel):
+    """Hybrid KIS search parameters; unset fields use pipeline defaults."""
+
     query: str = Field(min_length=1)
-    num_candidates: int = Field(default=500, ge=1, le=1000)
+
     num_results: int = Field(default=100, ge=1, le=500)
-    weight_clip: float = Field(default=0.8, ge=0.0)
-    weight_asr: float = Field(default=0.2, ge=0.0)
-    delta: float = Field(default=3.0, ge=0.0)
+    weight_visual: float = Field(default=0.8, ge=0.0)
+    weight_transcript: float = Field(default=0.2, ge=0.0)
+
+    num_candidates_visual: int = Field(default=500, ge=1, le=1000)
+    rrf_k: int = Field(default=RRF_K, ge=1, le=200)
+
+    bm25_top_segments: int = Field(default=50, ge=1, le=500)
+    sem_top_segments: int = Field(default=50, ge=1, le=500)
+    delta: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Keyframe <-> ASR segment eligibility window (seconds).",
+    )
+    segment_min_gap: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Min seconds between sampled keyframes per ASR segment.",
+    )
+    segment_pad: float = Field(
+        default=0.5,
+        ge=0.0,
+        description="Pad around segment [start, end] when mapping to keyframes.",
+    )
+
+    def to_search_config(self) -> SearchConfig:
+        return SearchConfig(
+            num_candidates_vis=self.num_candidates_visual,
+            bm25_top_segments=self.bm25_top_segments,
+            sem_top_segments=self.sem_top_segments,
+            segment_min_gap=self.segment_min_gap,
+            segment_pad=self.segment_pad,
+            delta=self.delta,
+            num_results=self.num_results,
+            rrf_k=self.rrf_k,
+        )
 
 
 class Hit(BaseModel):

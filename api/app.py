@@ -7,21 +7,21 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from api.schemas import Hit, SearchRequest, SearchResponse
-from engine.Embedder import Embedder
+from engine.search_service import SearchService
 
 load_dotenv()
 
-embedder: Embedder | None = None
+search_service: SearchService | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global embedder
+    global search_service
     print("Starting up...")
-    embedder = Embedder(device=os.getenv("DEVICE", "gpu"))
+    search_service = SearchService(device=os.getenv("DEVICE", "gpu"))
     yield
     print("Shutting down...")
-    embedder = None
+    search_service = None
 
 
 app = FastAPI(lifespan=lifespan)
@@ -34,14 +34,12 @@ def check_health():
 
 @app.post("/search")
 def search(request: SearchRequest) -> SearchResponse:
-    assert embedder is not None
-    raw_hits = embedder.search(
+    assert search_service is not None
+    raw_hits = search_service.search(
         request.query,
-        request.num_candidates,
-        request.num_results,
-        request.weight_clip,
-        request.weight_asr,
-        request.delta,
+        cfg=request.to_search_config(),
+        weight_visual=request.weight_visual,
+        weight_transcript=request.weight_transcript,
     )
     hits = [Hit(rank=i, **hit) for i, hit in enumerate(raw_hits, start=1)]
     return SearchResponse(query=request.query, hits=hits)
