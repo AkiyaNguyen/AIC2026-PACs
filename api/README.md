@@ -9,9 +9,11 @@ Required for `engine/` and `api/` (do not commit secrets):
 ```
 FEATURES_ROOT=<absolute path to features/>
 DEVICE=cpu
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
 `DEVICE` is optional (`cpu` | `gpu`; default `gpu`).
+`CORS_ORIGINS` is optional and controls which browser origins may call the API.
 
 `POST /search` field `weight_clip` is the **visual** weight \(w_v\) on min-max’d RRF (CLIP + SigLIP2 ranks), not raw CLIP cosine. `weight_asr` is \(w_a\) after min-max on the same pool. Both `FEATURES_ROOT/clip` and `FEATURES_ROOT/SigLIP2` are required.
 
