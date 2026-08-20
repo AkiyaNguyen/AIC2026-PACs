@@ -27,7 +27,9 @@ type SearchHit = {
   pts_time: number;
   row_idx_in_video: number;
   frame_idx: number;
-  thumbnail_url?: string;
+  fps: number;
+  thumbnail_url?: string | null;
+  video_url?: string | null;
 };
 
 type SearchResponse = {
@@ -67,6 +69,18 @@ function formatTime(seconds: number) {
     .padStart(4, "0")}`;
 }
 
+function formatOffset(seconds: number) {
+  if (!Number.isFinite(seconds) || Math.abs(seconds) < 0.05) {
+    return "Đúng keyframe gốc";
+  }
+  return `${seconds > 0 ? "+" : ""}${seconds.toFixed(1)} giây so với keyframe`;
+}
+
+function resolveApiUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 function assertSearchResponse(value: unknown): SearchResponse {
   if (!value || typeof value !== "object") {
     throw new Error("Backend trả về dữ liệu không hợp lệ.");
@@ -90,7 +104,15 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [playbackPosition, setPlaybackPosition] = useState<{
+    clipRow: number;
+    seconds: number;
+  } | null>(null);
+  const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(
+    () => new Set(),
+  );
   const controllerRef = useRef<AbortController | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const checkHealth = useCallback(async () => {
     try {
@@ -120,6 +142,30 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !selectedHit?.video_url) return;
+
+    const seekToKeyframe = () => {
+      const upperBound = Number.isFinite(video.duration)
+        ? video.duration
+        : selectedHit.pts_time;
+      video.currentTime = Math.max(
+        0,
+        Math.min(selectedHit.pts_time, upperBound),
+      );
+      video.pause();
+    };
+
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      seekToKeyframe();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", seekToKeyframe, { once: true });
+    return () => video.removeEventListener("loadedmetadata", seekToKeyframe);
+  }, [selectedHit]);
+
   function updateParameter<K extends keyof SearchParameters>(
     key: K,
     value: SearchParameters[K],
@@ -137,6 +183,7 @@ export default function Home() {
     setIsSearching(true);
     setError(null);
     setSelectedHit(null);
+    setFailedThumbnails(new Set());
     const startedAt = performance.now();
 
     try {
@@ -190,8 +237,64 @@ export default function Home() {
     }
   }
 
-  async function copyAnswer(hit: SearchHit) {
-    const value = `${hit.video_id}, ${hit.frame_idx}`;
+  function thumbnailUrl(hit: SearchHit) {
+    if (!hit.thumbnail_url || failedThumbnails.has(hit.thumbnail_url)) return null;
+    return resolveApiUrl(hit.thumbnail_url);
+  }
+
+  function markThumbnailFailed(hit: SearchHit) {
+    const url = hit.thumbnail_url;
+    if (!url) return;
+    setFailedThumbnails((current) => {
+      const next = new Set(current);
+      next.add(url);
+      return next;
+    });
+  }
+
+  function moveVideoBy(seconds: number) {
+    const video = videoRef.current;
+    if (!video || !selectedHit) return;
+    const upperBound = Number.isFinite(video.duration)
+      ? video.duration
+      : Number.POSITIVE_INFINITY;
+    video.currentTime = Math.max(
+      0,
+      Math.min(video.currentTime + seconds, upperBound),
+    );
+    setPlaybackPosition({
+      clipRow: selectedHit.clip_row,
+      seconds: video.currentTime,
+    });
+  }
+
+  function jumpToKeyframe() {
+    const video = videoRef.current;
+    if (!video || !selectedHit) return;
+    const upperBound = Number.isFinite(video.duration)
+      ? video.duration
+      : selectedHit.pts_time;
+    video.currentTime = Math.max(
+      0,
+      Math.min(selectedHit.pts_time, upperBound),
+    );
+    video.pause();
+    setPlaybackPosition({
+      clipRow: selectedHit.clip_row,
+      seconds: video.currentTime,
+    });
+  }
+
+  function trackPlaybackPosition(video: HTMLVideoElement) {
+    if (!selectedHit) return;
+    setPlaybackPosition({
+      clipRow: selectedHit.clip_row,
+      seconds: video.currentTime,
+    });
+  }
+
+  async function copyKisAnswer(videoId: string, frameIdx: number) {
+    const value = `${videoId}, ${frameIdx}`;
     try {
       await navigator.clipboard.writeText(value);
       setCopied(value);
@@ -201,11 +304,15 @@ export default function Home() {
     }
   }
 
+  function copyAnswer(hit: SearchHit) {
+    return copyKisAnswer(hit.video_id, hit.frame_idx);
+  }
+
   function exportCsv() {
     if (!hits.length) return;
-    const header = "rank,video_id,frame_idx,pts_time,score";
+    const header = "rank,video_id,frame_idx,pts_time,fps,score";
     const rows = hits.map((hit) =>
-      [hit.rank, hit.video_id, hit.frame_idx, hit.pts_time, hit.score].join(","),
+      [hit.rank, hit.video_id, hit.frame_idx, hit.pts_time, hit.fps, hit.score].join(","),
     );
     const blob = new Blob([[header, ...rows].join("\n")], {
       type: "text/csv;charset=utf-8",
@@ -223,6 +330,29 @@ export default function Home() {
     online: "Backend sẵn sàng",
     offline: "Backend chưa kết nối",
   }[health];
+  const selectedThumbnailUrl = selectedHit ? thumbnailUrl(selectedHit) : null;
+  const selectedVideoUrl = selectedHit?.video_url
+    ? resolveApiUrl(selectedHit.video_url)
+    : null;
+  const playbackSeconds = selectedHit && playbackPosition?.clipRow === selectedHit.clip_row
+    ? playbackPosition.seconds
+    : (selectedHit?.pts_time ?? 0);
+  const selectedFps = selectedHit && Number.isFinite(selectedHit.fps) && selectedHit.fps > 0
+    ? selectedHit.fps
+    : null;
+  const playbackFrameIdx = selectedHit
+    ? Math.max(
+        0,
+        selectedFps
+          ? selectedHit.frame_idx + Math.round(
+              (playbackSeconds - selectedHit.pts_time) * selectedFps,
+            )
+          : selectedHit.frame_idx,
+      )
+    : 0;
+  const playbackOffset = selectedHit
+    ? playbackSeconds - selectedHit.pts_time
+    : 0;
 
   return (
     <main className="workspace-shell">
@@ -436,6 +566,7 @@ export default function Home() {
             <div className="results-grid">
               {hits.map((hit) => {
                 const selected = selectedHit?.clip_row === hit.clip_row;
+                const resolvedThumbnailUrl = thumbnailUrl(hit);
                 return (
                   <article
                     className={selected ? "result-card selected" : "result-card"}
@@ -448,10 +579,14 @@ export default function Home() {
                       onClick={() => setSelectedHit(hit)}
                     >
                       <div className="frame-preview">
-                        {hit.thumbnail_url ? (
-                          // The current API has no image URL; this is ready for a future media endpoint.
+                        {resolvedThumbnailUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={hit.thumbnail_url} alt={`Keyframe ${hit.frame_idx}`} />
+                          <img
+                            src={resolvedThumbnailUrl}
+                            alt={`Keyframe ${hit.frame_idx} của ${hit.video_id}`}
+                            loading="lazy"
+                            onError={() => markThumbnailFailed(hit)}
+                          />
                         ) : (
                           <div className="frame-placeholder">
                             <span>{hit.video_id}</span>
@@ -497,21 +632,97 @@ export default function Home() {
                     ×
                   </button>
                 </div>
-                <div className="inspector-frame frame-placeholder">
-                  <span>{selectedHit.video_id}</span>
-                  <strong>{formatTime(selectedHit.pts_time)}</strong>
+                <div className="inspector-frame">
+                  {selectedVideoUrl ? (
+                    // Source dataset does not include timed caption tracks.
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video
+                      key={selectedHit.video_id}
+                      ref={videoRef}
+                      src={selectedVideoUrl}
+                      poster={selectedThumbnailUrl ?? undefined}
+                      preload="metadata"
+                      controls
+                      playsInline
+                      onTimeUpdate={(event) => trackPlaybackPosition(event.currentTarget)}
+                      onSeeked={(event) => trackPlaybackPosition(event.currentTarget)}
+                      aria-label={`Video ${selectedHit.video_id}, bắt đầu tại ${formatTime(selectedHit.pts_time)}`}
+                    />
+                  ) : selectedThumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selectedThumbnailUrl}
+                      alt={`Keyframe ${selectedHit.frame_idx} của ${selectedHit.video_id}`}
+                      onError={() => markThumbnailFailed(selectedHit)}
+                    />
+                  ) : (
+                    <div className="frame-placeholder">
+                      <span>{selectedHit.video_id}</span>
+                      <strong>{formatTime(selectedHit.pts_time)}</strong>
+                    </div>
+                  )}
                 </div>
+                {selectedVideoUrl && (
+                  <>
+                    <div className="video-context-controls" aria-label="Điều khiển quanh keyframe">
+                      <button type="button" onClick={() => moveVideoBy(-5)}>
+                        −5 giây
+                      </button>
+                      <button type="button" onClick={jumpToKeyframe}>
+                        Về keyframe · {formatTime(selectedHit.pts_time)}
+                      </button>
+                      <button type="button" onClick={() => moveVideoBy(5)}>
+                        +5 giây
+                      </button>
+                    </div>
+                    <section className="playhead-panel" aria-label="Vị trí video đang xem">
+                      <div className="playhead-heading">
+                        <div>
+                          <p className="eyebrow">Playhead hiện tại</p>
+                          <strong>{formatTime(playbackSeconds)}</strong>
+                        </div>
+                        <span>{formatOffset(playbackOffset)}</span>
+                      </div>
+                      <div className="playhead-values">
+                        <div>
+                          <span>Timestamp chính xác</span>
+                          <strong>{playbackSeconds.toFixed(3)} giây</strong>
+                        </div>
+                        <div>
+                          <span>Frame ID hiện tại</span>
+                          <strong>{playbackFrameIdx.toLocaleString("vi-VN")}</strong>
+                        </div>
+                        <div>
+                          <span>FPS nguồn</span>
+                          <strong>{selectedFps?.toFixed(3) ?? "Không có"}</strong>
+                        </div>
+                      </div>
+                      <button
+                        className="copy-playhead-action"
+                        type="button"
+                        onClick={() => void copyKisAnswer(selectedHit.video_id, playbackFrameIdx)}
+                      >
+                        <span>
+                          {copied === `${selectedHit.video_id}, ${playbackFrameIdx}`
+                            ? "Đã chép đáp án đang xem"
+                            : "Chép đáp án tại playhead"}
+                        </span>
+                        <code>{selectedHit.video_id}, {playbackFrameIdx}</code>
+                      </button>
+                    </section>
+                  </>
+                )}
                 <dl>
                   <div>
                     <dt>Video ID</dt>
                     <dd>{selectedHit.video_id}</dd>
                   </div>
                   <div>
-                    <dt>Frame ID</dt>
+                    <dt>Frame ID retrieval</dt>
                     <dd>{selectedHit.frame_idx.toLocaleString("vi-VN")}</dd>
                   </div>
                   <div>
-                    <dt>Timestamp</dt>
+                    <dt>Timestamp retrieval</dt>
                     <dd>{selectedHit.pts_time.toFixed(3)} giây</dd>
                   </div>
                   <div>
@@ -532,12 +743,12 @@ export default function Home() {
                   type="button"
                   onClick={() => void copyAnswer(selectedHit)}
                 >
-                  Chép đáp án KIS
+                  Chép đáp án KIS gốc
                   <span>{selectedHit.video_id}, {selectedHit.frame_idx}</span>
                 </button>
                 <p className="inspector-note">
-                  Backend hiện chưa cung cấp ảnh keyframe hoặc video preview. Inspector
-                  đã sẵn sàng nhận media khi endpoint được bổ sung.
+                  Video đầy đủ được tải theo từng đoạn cần xem. Player mở và tạm dừng
+                  tại keyframe, nhưng không giới hạn phạm vi tua hoặc phát.
                 </p>
               </aside>
             )}

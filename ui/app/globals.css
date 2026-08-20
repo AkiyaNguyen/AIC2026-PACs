@@ -299,7 +299,7 @@ kbd {
   margin-top: 22px;
 }
 
-.results-layout.has-inspector { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+.results-layout.has-inspector { grid-template-columns: minmax(0, 1fr) minmax(380px, 440px); align-items: start; }
 .results-layout .results-grid { margin-top: 0; }
 .has-inspector .results-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
@@ -368,7 +368,26 @@ kbd {
 .inspector-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px; }
 .inspector-header h3 { margin-bottom: 0; font-size: 19px; }
 .inspector-header button { border: 0; background: transparent; color: var(--muted); font-size: 25px; line-height: 1; }
-.inspector-frame { aspect-ratio: 16 / 10; border-block: 1px solid var(--line); }
+.inspector-frame { aspect-ratio: 16 / 9; overflow: hidden; border-block: 1px solid var(--line); background: #050a0c; }
+.inspector-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.inspector-frame video { display: block; width: 100%; height: 100%; object-fit: contain; background: #050a0c; }
+.inspector-frame .frame-placeholder { height: 100%; }
+.video-context-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px; border-bottom: 1px solid var(--line); padding: 10px 12px; }
+.video-context-controls button { min-width: 0; border: 1px solid #38515a; border-radius: 7px; background: #14252b; color: #c9d8dc; padding: 8px 9px; font-size: 10px; }
+.video-context-controls button:hover { border-color: var(--cyan); color: var(--cyan); }
+.playhead-panel { border-bottom: 1px solid var(--line); padding: 14px 16px 16px; background: rgba(7, 16, 19, 0.52); }
+.playhead-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.playhead-heading .eyebrow { margin-bottom: 4px; }
+.playhead-heading strong { color: #f0f7f8; font-family: var(--font-geist-mono), monospace; font-size: 22px; }
+.playhead-heading > span { border: 1px solid #334950; border-radius: 999px; color: #91a6ad; padding: 5px 8px; font-size: 9px; white-space: nowrap; }
+.playhead-values { display: grid; grid-template-columns: 1.25fr 1fr 0.75fr; gap: 7px; margin-top: 12px; }
+.playhead-values div { min-width: 0; border: 1px solid #2b3e45; border-radius: 8px; background: #0f1c21; padding: 9px; }
+.playhead-values span, .playhead-values strong { display: block; }
+.playhead-values span { margin-bottom: 5px; color: #758a92; font-size: 9px; }
+.playhead-values strong { overflow: hidden; color: #dce8eb; font-family: var(--font-geist-mono), monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.copy-playhead-action { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; border: 1px solid rgba(89, 224, 208, 0.42); border-radius: 8px; background: rgba(89, 224, 208, 0.09); color: var(--cyan); padding: 10px 11px; font-size: 11px; font-weight: 700; }
+.copy-playhead-action:hover { border-color: var(--cyan); background: rgba(89, 224, 208, 0.14); }
+.copy-playhead-action code { color: #d9e7ea; font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 500; }
 .inspector dl { margin: 0; padding: 8px 18px; }
 .inspector dl div { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid rgba(38,56,63,0.65); padding: 10px 0; }
 .inspector dl div:last-child { border-bottom: 0; }
@@ -458,12 +477,16 @@ kbd {
 
 @media (min-width: 721px) and (max-width: 1080px) {
   .settings-content { grid-template-columns: 1fr; }
+  .results-layout.has-inspector { grid-template-columns: 1fr; }
   .results-grid, .has-inspector .results-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inspector { position: static; grid-row: 1; }
 }
 
 @media (max-width: 470px) {
   .results-grid, .has-inspector .results-grid { grid-template-columns: 1fr; }
   .result-tools .result-count { display: none; }
+  .playhead-values { grid-template-columns: 1fr 1fr; }
+  .playhead-values div:last-child { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

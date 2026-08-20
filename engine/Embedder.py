@@ -274,6 +274,7 @@ class Embedder:
             "video_ids": [],  # i_th row of index matrix is from video_ids[i]
             "pts_list": [],  # i_th row of index matrix is at pts_list[i] seconds
             "frame_idx_list": [],  # i_th row of index matrix is at frame_idx_list[i]
+            "fps_list": [],  # source FPS used to convert a playback timestamp to frame_idx
             "row_to_idx_in_each_video": [],  # map clip_row -> index of keyframe in such video
         }
         n_clip = 0
@@ -287,14 +288,16 @@ class Embedder:
                 map_rows = list(csv.DictReader(f))
             pts = [float(r["pts_time"]) for r in map_rows]
             frame_idx = [int(r["frame_idx"]) for r in map_rows]
-            if len(pts) < n or len(frame_idx) < n:
+            fps = [float(r["fps"]) for r in map_rows]
+            if len(pts) < n or len(frame_idx) < n or len(fps) < n:
                 raise ValueError(
                     f"{video_id}: map.csv has {len(pts)} pts / {len(frame_idx)} "
-                    f"frame_idx, clip gallery n_rows={n}"
+                    f"frame_idx / {len(fps)} fps, clip gallery n_rows={n}"
                 )
             self.row_index_map_info["video_ids"].extend([video_id] * n)
             self.row_index_map_info["pts_list"].extend(pts[:n])
             self.row_index_map_info["frame_idx_list"].extend(frame_idx[:n])
+            self.row_index_map_info["fps_list"].extend(fps[:n])
             self.row_index_map_info["row_to_idx_in_each_video"].extend(list(range(n))) # zero idx
             n_clip += n
 
@@ -368,6 +371,7 @@ class Embedder:
             "pts_time": float(self.row_index_map_info["pts_list"][union_rows[i]]),
             "row_idx_in_video": int(self.row_index_map_info["row_to_idx_in_each_video"][union_rows[i]]),
             "frame_idx": int(self.row_index_map_info["frame_idx_list"][union_rows[i]]),
+            "fps": float(self.row_index_map_info["fps_list"][union_rows[i]]),
         } for i in order]
 
 

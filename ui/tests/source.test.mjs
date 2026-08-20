@@ -16,6 +16,17 @@ test("ships the PACs KIS workspace instead of the starter preview", async () => 
   assert.match(page, /\/search/);
   assert.match(page, /weight_clip/);
   assert.match(page, /weight_asr/);
+  assert.match(page, /resolveApiUrl/);
+  assert.match(page, /thumbnail_url/);
+  assert.match(page, /video_url/);
+  assert.match(page, /preload="metadata"/);
+  assert.match(page, /jumpToKeyframe/);
+  assert.match(page, /Về keyframe/);
+  assert.match(page, /playbackPosition/);
+  assert.match(page, /onTimeUpdate/);
+  assert.match(page, /Frame ID hiện tại/);
+  assert.match(page, /Chép đáp án tại playhead/);
+  assert.match(page, /onError=\{\(\) => markThumbnailFailed/);
   assert.match(page, /Xuất CSV/);
   assert.match(layout, /PACs Search · AIC 2026/);
   assert.doesNotMatch(page, /SkeletonPreview/);

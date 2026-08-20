@@ -8,10 +8,15 @@ Giao diện Textual KIS cho retrieval backend của PACs AIC 2026.
 - Gửi truy vấn tới `POST /search`.
 - Điều chỉnh số candidate, số result, trọng số visual/ASR và ASR window.
 - Xem danh sách keyframe theo rank và inspect đầy đủ metadata.
+- Phát toàn bộ video từ đúng timestamp của keyframe, tua tự do hoặc nhảy ±5 giây.
+- Theo dõi timestamp/frame ID tại playhead và sao chép đáp án KIS đã điều chỉnh.
 - Sao chép đáp án KIS `video_id, frame_idx`.
 - Xuất toàn bộ ranked results thành CSV.
 
-Backend hiện chưa cung cấp ảnh keyframe hoặc video endpoint, vì vậy UI dùng media placeholder và vẫn hiển thị toàn bộ metadata hiện có. Trường `thumbnail_url` đã được hỗ trợ ở phía UI để có thể hiển thị ảnh khi backend bổ sung media URL.
+UI hiển thị keyframe từ `thumbnail_url` do backend cung cấp và tự quay về media
+placeholder nếu batch tương ứng chưa có trong `KEYFRAMES_ROOT`.
+Khi kết quả có `video_url`, inspector dùng native video player với `preload=metadata`;
+video không tự phát và chỉ tải các byte cần thiết khi xem hoặc tua.
 
 ## Cấu hình
 

@@ -18,6 +18,9 @@ class Hit(BaseModel):
     pts_time: float
     row_idx_in_video: int
     frame_idx: int
+    fps: float = Field(gt=0.0)
+    thumbnail_url: str | None = None
+    video_url: str | None = None
 
 
 class SearchResponse(BaseModel):
