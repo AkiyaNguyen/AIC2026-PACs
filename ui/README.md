@@ -6,6 +6,7 @@ Giao diện Textual KIS cho retrieval backend của PACs AIC 2026.
 
 - Theo dõi trạng thái FastAPI backend.
 - Gửi truy vấn tới `POST /search`.
+- Nhập truy vấn tiếng Việt và tùy chọn tinh chỉnh bản tiếng Anh cho CLIP; backend tự dịch khi để trống.
 - Điều chỉnh candidate visual, số result, fusion visual/transcript và MiniLM/BM25.
 - Xem danh sách keyframe theo rank và inspect đầy đủ metadata.
 - Phát toàn bộ video từ đúng timestamp của keyframe, tua tự do hoặc nhảy ±5 giây.

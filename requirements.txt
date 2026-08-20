@@ -16,3 +16,5 @@ transformers>=4.49.0
 # ASR query encode + asr_emb gallery (same MiniLM as offline embed notebooks)
 sentence-transformers>=3.0.0
 rank-bm25>=0.2.2
+# VI→EN fill for CLIP query when query_en omitted (POST /search)
+deep-translator>=1.11.4

@@ -3,15 +3,20 @@ from unittest.mock import patch
 
 from api.app import search
 from api.schemas import SearchRequest
+from engine.query_language import ResolvedQueries
 
 
 class FakeSearchService:
     def __init__(self) -> None:
-        self.call: tuple[str, dict] | None = None
+        self.call: tuple[tuple, dict] | None = None
 
-    def search(self, query: str, **kwargs) -> list[dict]:
-        self.call = (query, kwargs)
-        return [
+    def search(self, *args, **kwargs) -> tuple[ResolvedQueries, list[dict]]:
+        self.call = (args, kwargs)
+        return ResolvedQueries(
+            query_vi="xuất khẩu gạo",
+            query_en="Vietnam rice export",
+            query_en_source="user",
+        ), [
             {
                 "score": 0.91,
                 "clip_row": 42,
@@ -29,7 +34,8 @@ class SearchEndpointContractTests(TestCase):
     def test_passes_hybrid_config_and_enriches_media_urls(self):
         service = FakeSearchService()
         request = SearchRequest(
-            query="xuất khẩu gạo",
+            query_vi="xuất khẩu gạo",
+            query_en="Vietnam rice export",
             num_candidates_visual=120,
             num_results=10,
             weight_visual=0.4,
@@ -54,8 +60,8 @@ class SearchEndpointContractTests(TestCase):
             response = search(request)
 
         self.assertIsNotNone(service.call)
-        query, kwargs = service.call or ("", {})
-        self.assertEqual(query, "xuất khẩu gạo")
+        args, kwargs = service.call or ((), {})
+        self.assertEqual(args, ("xuất khẩu gạo", "Vietnam rice export"))
         self.assertEqual(kwargs["cfg"].num_candidates_vis, 120)
         self.assertEqual(kwargs["cfg"].bm25_top_segments, 80)
         self.assertEqual(kwargs["cfg"].sem_top_segments, 70)
@@ -63,6 +69,10 @@ class SearchEndpointContractTests(TestCase):
         self.assertEqual(kwargs["weight_transcript"], 0.6)
         self.assertEqual(kwargs["weight_sem_text"], 0.3)
         self.assertEqual(kwargs["weight_bm25"], 0.7)
+
+        self.assertEqual(response.query_vi, "xuất khẩu gạo")
+        self.assertEqual(response.query_en, "Vietnam rice export")
+        self.assertEqual(response.query_en_source, "user")
 
         hit = response.hits[0]
         self.assertEqual(hit.fps, 30.0)

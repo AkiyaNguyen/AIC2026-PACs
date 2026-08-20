@@ -38,7 +38,7 @@ class HitSchemaTests(TestCase):
 class SearchRequestSchemaTests(TestCase):
     def test_maps_hybrid_controls_to_search_config(self):
         request = SearchRequest(
-            query="xuất khẩu gạo",
+            query_vi="xuất khẩu gạo",
             num_candidates_visual=120,
             num_results=25,
             bm25_top_segments=80,
@@ -62,7 +62,7 @@ class SearchRequestSchemaTests(TestCase):
     def test_rejects_all_zero_retrieval_weights(self):
         with self.assertRaises(ValidationError):
             SearchRequest(
-                query="test",
+                query_vi="test",
                 weight_visual=0.0,
                 weight_transcript=0.0,
             )
@@ -70,7 +70,7 @@ class SearchRequestSchemaTests(TestCase):
     def test_rejects_empty_transcript_mix(self):
         with self.assertRaises(ValidationError):
             SearchRequest(
-                query="test",
+                query_vi="test",
                 weight_visual=0.5,
                 weight_transcript=0.5,
                 weight_sem_text=0.0,

@@ -38,7 +38,9 @@ type SearchHit = {
 };
 
 type SearchResponse = {
-  query: string;
+  query_vi: string;
+  query_en: string;
+  query_en_source: "user" | "translated";
   hits: SearchHit[];
 };
 
@@ -118,7 +120,13 @@ function assertSearchResponse(value: unknown): SearchResponse {
     throw new Error("Backend trả về dữ liệu không hợp lệ.");
   }
   const response = value as Partial<SearchResponse>;
-  if (typeof response.query !== "string" || !Array.isArray(response.hits)) {
+  if (
+    typeof response.query_vi !== "string" ||
+    typeof response.query_en !== "string" ||
+    (response.query_en_source !== "user" &&
+      response.query_en_source !== "translated") ||
+    !Array.isArray(response.hits)
+  ) {
     throw new Error("Backend trả về response không đúng schema /search.");
   }
   return response as SearchResponse;
@@ -126,6 +134,10 @@ function assertSearchResponse(value: unknown): SearchResponse {
 
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [queryEn, setQueryEn] = useState("");
+  const [queryEnSource, setQueryEnSource] = useState<
+    "user" | "translated" | null
+  >(null);
   const [lastQuery, setLastQuery] = useState("");
   const [parameters, setParameters] =
     useState<SearchParameters>(DEFAULT_PARAMETERS);
@@ -233,7 +245,12 @@ export default function Home() {
       const response = await fetch(`${API_BASE_URL}/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: normalizedQuery, ...parameters }),
+        body: JSON.stringify({
+          query_vi: normalizedQuery,
+          query_en:
+            queryEnSource === "translated" ? null : (queryEn.trim() || null),
+          ...parameters,
+        }),
         signal: controller.signal,
       });
 
@@ -246,7 +263,9 @@ export default function Home() {
 
       const data = assertSearchResponse(await response.json());
       setHits(data.hits);
-      setLastQuery(data.query);
+      setLastQuery(data.query_vi);
+      setQueryEn(data.query_en);
+      setQueryEnSource(data.query_en_source);
       setSelectedHit(data.hits[0] ?? null);
       setElapsedMs(Math.round(performance.now() - startedAt));
       setHealth("online");
@@ -439,17 +458,51 @@ export default function Home() {
         </div>
 
         <form className="query-form" onSubmit={handleSubmit}>
-          <label htmlFor="search-query" className="sr-only">
-            Mô tả sự kiện cần tìm
-          </label>
-          <textarea
-            id="search-query"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={handleQueryKeyDown}
-            placeholder="Mô tả cảnh, hành động, nhân vật hoặc lời thoại cần tìm…"
-            rows={3}
-          />
+          <div className="query-fields">
+            <label className="query-field" htmlFor="search-query-vi">
+              <span className="query-field-label">
+                Tiếng Việt
+                <small>SigLIP2 · MiniLM · BM25</small>
+              </span>
+              <textarea
+                id="search-query-vi"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  if (queryEnSource === "translated") {
+                    setQueryEn("");
+                    setQueryEnSource(null);
+                  }
+                }}
+                onKeyDown={handleQueryKeyDown}
+                placeholder="Mô tả cảnh, hành động, nhân vật hoặc lời thoại cần tìm…"
+                rows={3}
+              />
+            </label>
+            <label className="query-field" htmlFor="search-query-en">
+              <span className="query-field-label">
+                Tiếng Anh cho CLIP
+                <small>
+                  {queryEnSource === "translated"
+                    ? "Bản dịch tự động · có thể chỉnh sửa"
+                    : queryEnSource === "user"
+                      ? "Bản tiếng Anh do bạn nhập"
+                      : "Để trống để hệ thống tự dịch"}
+                </small>
+              </span>
+              <textarea
+                id="search-query-en"
+                value={queryEn}
+                onChange={(event) => {
+                  setQueryEn(event.target.value);
+                  setQueryEnSource(event.target.value.trim() ? "user" : null);
+                }}
+                onKeyDown={handleQueryKeyDown}
+                placeholder="Optional English query for CLIP…"
+                rows={3}
+              />
+            </label>
+          </div>
           <div className="query-actions">
             <p>
               <kbd>Ctrl</kbd> + <kbd>Enter</kbd> để tìm kiếm

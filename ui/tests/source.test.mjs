@@ -14,6 +14,10 @@ test("ships the PACs KIS workspace instead of the starter preview", async () => 
   assert.match(page, /PACs Search/);
   assert.match(page, /\/check_health/);
   assert.match(page, /\/search/);
+  assert.match(page, /query_vi/);
+  assert.match(page, /query_en/);
+  assert.match(page, /query_en_source/);
+  assert.match(page, /Tiếng Anh cho CLIP/);
   assert.match(page, /weight_visual/);
   assert.match(page, /weight_transcript/);
   assert.match(page, /weight_sem_text/);

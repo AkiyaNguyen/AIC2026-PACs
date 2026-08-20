@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 from engine.search.config import RRF_K, SearchConfig
@@ -6,7 +10,11 @@ from engine.search.config import RRF_K, SearchConfig
 class SearchRequest(BaseModel):
     """Hybrid KIS search parameters; unset fields use pipeline defaults."""
 
-    query: str = Field(min_length=1)
+    query_vi: str = Field(min_length=1, description="Vietnamese query (SigLIP + ASR).")
+    query_en: str | None = Field(
+        default=None,
+        description="English query for CLIP; if omitted, VI→EN is filled server-side.",
+    )
 
     num_results: int = Field(default=100, ge=1, le=500)
     weight_visual: float = Field(default=0.8, ge=0.0)
@@ -84,5 +92,7 @@ class Hit(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    query: str
+    query_vi: str
+    query_en: str
+    query_en_source: Literal["user", "translated"]
     hits: list[Hit] = Field(default_factory=list, max_length=500)

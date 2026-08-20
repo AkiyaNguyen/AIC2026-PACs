@@ -61,28 +61,33 @@ class HybridSearcher:
         semantic = AsrSemanticIndex(service.asr_embed_mat, service.asr_by_video)
         return cls(service, bm25, semantic, cfg)
 
-    def prepare(self, query: str, cfg: SearchConfig | None = None) -> QueryFeatures:
+    def prepare(
+        self,
+        query_vi: str,
+        query_en: str,
+        cfg: SearchConfig | None = None,
+    ) -> QueryFeatures:
         cfg = cfg or self.cfg
         timings: dict[str, float] = {}
 
         t0 = time.perf_counter()
-        vis_rows, s_vis = self._visual.retrieve(query, cfg)
+        vis_rows, s_vis = self._visual.retrieve(query_vi, query_en, cfg)
         timings["visual_ann_rrf"] = (time.perf_counter() - t0) * 1000
 
         t0 = time.perf_counter()
         q_asr = (
-            self.service.asr_encoder.encode_query(query)
+            self.service.asr_encoder.encode_query(query_vi)
             .reshape(-1)
             .astype(np.float32)
         )
-        proposals = self._transcript_proposer.propose(query, q_asr, cfg)
+        proposals = self._transcript_proposer.propose(query_vi, q_asr, cfg)
         timings["text_candidates"] = (time.perf_counter() - t0) * 1000
 
         pool = self._pool_builder.build(vis_rows, s_vis, proposals)
 
         t0 = time.perf_counter()
         r_sem, r_bm25 = self._transcript_scorer.score(
-            pool.all_rows, query, q_asr, cfg
+            pool.all_rows, query_vi, q_asr, cfg
         )
         timings["scoring"] = (time.perf_counter() - t0) * 1000
 
@@ -121,7 +126,8 @@ class HybridSearcher:
 
     def search(
         self,
-        query: str,
+        query_vi: str,
+        query_en: str,
         *,
         weight_visual: float = 0.8,
         weight_transcript: float = 0.2,
@@ -130,7 +136,7 @@ class HybridSearcher:
         cfg: SearchConfig | None = None,
     ) -> list[dict]:
         cfg = cfg or self.cfg
-        feats = self.prepare(query, cfg=cfg)
+        feats = self.prepare(query_vi, query_en, cfg=cfg)
         return self.rerank(
             feats,
             weight_visual=weight_visual,
