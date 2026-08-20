@@ -105,6 +105,8 @@ class HybridSearcher:
         *,
         weight_visual: float = 0.8,
         weight_transcript: float = 0.2,
+        weight_sem_text: float = 0.6,
+        weight_bm25: float = 0.4,
         num_results: int | None = None,
     ) -> list[dict]:
         return self._fusion.rank(
@@ -112,6 +114,8 @@ class HybridSearcher:
             self._info,
             weight_visual=weight_visual,
             weight_transcript=weight_transcript,
+            weight_sem_text=weight_sem_text,
+            weight_bm25=weight_bm25,
             num_results=num_results or self.cfg.num_results,
         )
 
@@ -121,6 +125,8 @@ class HybridSearcher:
         *,
         weight_visual: float = 0.8,
         weight_transcript: float = 0.2,
+        weight_sem_text: float = 0.6,
+        weight_bm25: float = 0.4,
         cfg: SearchConfig | None = None,
     ) -> list[dict]:
         cfg = cfg or self.cfg
@@ -129,5 +135,7 @@ class HybridSearcher:
             feats,
             weight_visual=weight_visual,
             weight_transcript=weight_transcript,
+            weight_sem_text=weight_sem_text,
+            weight_bm25=weight_bm25,
             num_results=cfg.num_results,
         )

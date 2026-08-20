@@ -22,7 +22,9 @@ All fields optional except `query`. Defaults match `engine/search/config.py`.
 | `query` | — | Natural-language KIS query (required) |
 | `num_results` | `100` | Max ranked hits returned |
 | `weight_visual` | `0.8` | Fusion weight on visual RRF channel |
-| `weight_transcript` | `0.2` | Fusion weight on transcript channel (BM25 + semantic) |
+| `weight_transcript` | `0.2` | Fusion weight on transcript mix (semantic + BM25) |
+| `weight_sem_text` | `0.6` | MiniLM cosine share **inside** transcript (normalized with `weight_bm25`) |
+| `weight_bm25` | `0.4` | BM25 share **inside** transcript |
 | `num_candidates_visual` | `500` | ANN top-K per CLIP and SigLIP2 tower |
 | `rrf_k` | `60` | RRF constant for CLIP + SigLIP2 merge |
 | `bm25_top_segments` | `50` | BM25 segment proposals |
@@ -44,6 +46,8 @@ Transcript-heavy tuning example:
   "query": "Xuất khẩu gạo Việt Nam",
   "weight_visual": 0.3,
   "weight_transcript": 0.7,
+  "weight_sem_text": 0.5,
+  "weight_bm25": 0.5,
   "bm25_top_segments": 80,
   "delta": 1.5
 }
@@ -55,6 +59,8 @@ Both `FEATURES_ROOT/clip` and `FEATURES_ROOT/SigLIP2` are required for visual se
 
 ```bash
 uvicorn api.app:app --host 127.0.0.1 --port 8000
+# after API is up: source tools/bashes/aliases.sh
+# search --input test_query/doctor_search.json --out result_search.json
 ```
 
 Wait until models finish loading. Docs: http://127.0.0.1:8000/docs

@@ -65,6 +65,8 @@ pytest.ini
 *.wav
 
 # Local previews / bulky outputs
+test_query/
+tools/
 artifacts/
 keyframes-out/
 ocr-out/

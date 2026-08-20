@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 def get_features_root() -> Path:
     """FEATURES_ROOT from .env (absolute path to features/ tree)."""
     raw = os.getenv("FEATURES_ROOT")

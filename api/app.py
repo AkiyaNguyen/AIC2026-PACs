@@ -40,6 +40,8 @@ def search(request: SearchRequest) -> SearchResponse:
         cfg=request.to_search_config(),
         weight_visual=request.weight_visual,
         weight_transcript=request.weight_transcript,
+        weight_sem_text=request.weight_sem_text,
+        weight_bm25=request.weight_bm25,
     )
     hits = [Hit(rank=i, **hit) for i, hit in enumerate(raw_hits, start=1)]
     return SearchResponse(query=request.query, hits=hits)

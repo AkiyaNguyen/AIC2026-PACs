@@ -52,8 +52,29 @@ def minmax_norm(values: np.ndarray) -> np.ndarray:
     return (x - lo) / (hi - lo)
 
 
-def combine_text_scores(r_sem: np.ndarray, r_bm25: np.ndarray) -> np.ndarray:
-    return np.maximum(minmax_norm(r_sem), minmax_norm(r_bm25))
+def combine_text_scores(
+    r_sem: np.ndarray,
+    r_bm25: np.ndarray,
+    weight_sem_text: float = 0.6,
+    weight_bm25: float = 0.4,
+) -> np.ndarray:
+    """Convex combination of min-max semantic cosine and BM25 on the pool."""
+    n = np.asarray(r_sem, dtype=np.float32).reshape(-1).shape[0]
+    acc = np.zeros(n, dtype=np.float32)
+    parts: list[np.ndarray] = []
+    weights: list[float] = []
+    if weight_sem_text > 0:
+        parts.append(minmax_norm(r_sem))
+        weights.append(float(weight_sem_text))
+    if weight_bm25 > 0:
+        parts.append(minmax_norm(r_bm25))
+        weights.append(float(weight_bm25))
+    if not parts:
+        return acc
+    wsum = float(sum(weights))
+    for part, w in zip(parts, weights):
+        acc += (w / wsum) * part
+    return acc
 
 
 def mix_scores(

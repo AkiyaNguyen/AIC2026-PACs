@@ -11,6 +11,16 @@ class SearchRequest(BaseModel):
     num_results: int = Field(default=100, ge=1, le=500)
     weight_visual: float = Field(default=0.8, ge=0.0)
     weight_transcript: float = Field(default=0.2, ge=0.0)
+    weight_sem_text: float = Field(
+        default=0.6,
+        ge=0.0,
+        description="Weight of MiniLM cosine inside the transcript mix.",
+    )
+    weight_bm25: float = Field(
+        default=0.4,
+        ge=0.0,
+        description="Weight of BM25 inside the transcript mix.",
+    )
 
     num_candidates_visual: int = Field(default=500, ge=1, le=1000)
     rrf_k: int = Field(default=RRF_K, ge=1, le=200)

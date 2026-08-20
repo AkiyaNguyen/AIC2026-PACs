@@ -87,11 +87,15 @@ class SearchService:
         cfg: SearchConfig | None = None,
         weight_visual: float = 0.8,
         weight_transcript: float = 0.2,
+        weight_sem_text: float = 0.6,
+        weight_bm25: float = 0.4,
     ) -> list[dict]:
         raw = self.hybrid.search(
             query,
             weight_visual=weight_visual,
             weight_transcript=weight_transcript,
+            weight_sem_text=weight_sem_text,
+            weight_bm25=weight_bm25,
             cfg=cfg,
         )
         keys = (

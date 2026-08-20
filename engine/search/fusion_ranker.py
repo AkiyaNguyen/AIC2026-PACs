@@ -19,10 +19,17 @@ class KisFusionRanker:
         *,
         weight_visual: float,
         weight_transcript: float,
+        weight_sem_text: float,
+        weight_bm25: float,
         num_results: int,
     ) -> list[dict]:
         t0 = time.perf_counter()
-        r_text = combine_text_scores(feats.r_sem, feats.r_bm25)
+        r_text = combine_text_scores(
+            feats.r_sem,
+            feats.r_bm25,
+            weight_sem_text=weight_sem_text,
+            weight_bm25=weight_bm25,
+        )
         vis_norm = minmax_norm(feats.s_vis)
         wsum = weight_visual + weight_transcript
         if wsum < 1e-12:
