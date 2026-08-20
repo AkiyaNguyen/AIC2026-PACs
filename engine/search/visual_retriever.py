@@ -19,14 +19,16 @@ class VisualKeyframeRetriever:
 
     def retrieve(
         self,
-        query: str,
+        query_vi: str,
+        query_en: str,
         cfg: SearchConfig,
     ) -> tuple[np.ndarray, np.ndarray]:
+        """CLIP uses English; SigLIP2 uses Vietnamese."""
         k = min(cfg.num_candidates_vis, self._service.clip_index.ntotal)
         clip_ids = self._service.ann(
-            self._service.clip_encoder, self._service.clip_index, query, k
-        )
+            self._service.clip_encoder, self._service.clip_index, query_en, k
+        ) # embed english query for clip retrieval
         sig_ids = self._service.ann(
-            self._service.siglip_encoder, self._service.siglip_index, query, k
-        )
+            self._service.siglip_encoder, self._service.siglip_index, query_vi, k
+        ) # vietnamese query for siglip2 retrieval
         return rrf_union(clip_ids, sig_ids, k=cfg.rrf_k)

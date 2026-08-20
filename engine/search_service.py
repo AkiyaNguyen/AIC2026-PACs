@@ -26,6 +26,7 @@ from engine.gallery.loaders import (
     load_gallery_map,
     load_visual_tower,
 )
+from engine.query_language import ResolvedQueries, resolve_queries
 from engine.search import HybridSearcher
 from engine.search.config import SearchConfig
 
@@ -82,16 +83,19 @@ class SearchService:
 
     def search(
         self,
-        query: str,
+        query_vi: str,
+        query_en: str | None = None,
         *,
         cfg: SearchConfig | None = None,
         weight_visual: float = 0.8,
         weight_transcript: float = 0.2,
         weight_sem_text: float = 0.6,
         weight_bm25: float = 0.4,
-    ) -> list[dict]:
+    ) -> tuple[ResolvedQueries, list[dict]]:
+        resolved = resolve_queries(query_vi, query_en)
         raw = self.hybrid.search(
-            query,
+            resolved.query_vi,
+            resolved.query_en,
             weight_visual=weight_visual,
             weight_transcript=weight_transcript,
             weight_sem_text=weight_sem_text,
@@ -106,7 +110,8 @@ class SearchService:
             "row_idx_in_video",
             "frame_idx",
         )
-        return [{k: hit[k] for k in keys} for hit in raw]
+        hits = [{k: hit[k] for k in keys} for hit in raw]
+        return resolved, hits
 
 
 if __name__ == "__main__":
@@ -122,12 +127,16 @@ if __name__ == "__main__":
     n_meta = len(service.row_index_map_info["video_ids"])
     print("clip meta rows", n_meta, "asr videos", len(service.asr_by_video))
 
-    query = "chương trình 60 giây đài truyền hình thành phố Hồ Chí Minh"
-    hits = service.search(
-        query,
+    query_vi = "chương trình 60 giây đài truyền hình thành phố Hồ Chí Minh"
+    resolved, hits = service.search(
+        query_vi,
         cfg=SearchConfig(num_candidates_vis=50, num_results=5),
         weight_visual=0.8,
         weight_transcript=0.2,
+    )
+    print(
+        f"query_vi={resolved.query_vi!r}\n"
+        f"query_en={resolved.query_en!r} ({resolved.query_en_source})"
     )
     for rank, hit in enumerate(hits, start=1):
         print(

@@ -15,11 +15,12 @@ DEVICE=cpu
 
 ## `POST /search` body
 
-All fields optional except `query`. Defaults match `engine/search/config.py`.
+All fields optional except `query_vi`. Defaults match `engine/search/config.py`.
 
 | Field | Default | Role |
 |-------|---------|------|
-| `query` | — | Natural-language KIS query (required) |
+| `query_vi` | — | Vietnamese KIS query (required). Used by SigLIP2 + ASR (MiniLM/BM25). |
+| `query_en` | omit | English for CLIP. If omitted/blank, server fills VI→EN (`deep-translator`). |
 | `num_results` | `100` | Max ranked hits returned |
 | `weight_visual` | `0.8` | Fusion weight on visual RRF channel |
 | `weight_transcript` | `0.2` | Fusion weight on transcript mix (semantic + BM25) |
@@ -33,17 +34,26 @@ All fields optional except `query`. Defaults match `engine/search/config.py`.
 | `segment_min_gap` | `1.0` | Min gap between keyframes sampled per segment |
 | `segment_pad` | `0.5` | Pad around segment interval when mapping to keyframes |
 
-Minimal request:
+Minimal request (EN auto-filled):
 
 ```json
-{"query": "Xuất khẩu gạo Việt Nam"}
+{"query_vi": "Xuất khẩu gạo Việt Nam"}
+```
+
+With refined English for CLIP:
+
+```json
+{
+  "query_vi": "Xuất khẩu gạo Việt Nam",
+  "query_en": "Vietnam rice export"
+}
 ```
 
 Transcript-heavy tuning example:
 
 ```json
 {
-  "query": "Xuất khẩu gạo Việt Nam",
+  "query_vi": "Xuất khẩu gạo Việt Nam",
   "weight_visual": 0.3,
   "weight_transcript": 0.7,
   "weight_sem_text": 0.5,
@@ -52,6 +62,8 @@ Transcript-heavy tuning example:
   "delta": 1.5
 }
 ```
+
+Response includes `query_vi`, `query_en`, and `query_en_source` (`user` | `translated`) so the client can show and refine both fields. Translation failure → HTTP `503`.
 
 Both `FEATURES_ROOT/clip` and `FEATURES_ROOT/SigLIP2` are required for visual search. Transcript fields need `asr/`, `asr_emb/`, and Whisper JSONL under `asr/`.
 
