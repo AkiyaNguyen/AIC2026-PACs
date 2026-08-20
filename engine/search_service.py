@@ -105,6 +105,8 @@ class SearchService:
             "pts_time",
             "row_idx_in_video",
             "frame_idx",
+            "fps",
+            "source",
         )
         return [{k: hit[k] for k in keys} for hit in raw]
 

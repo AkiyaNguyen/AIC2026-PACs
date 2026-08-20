@@ -17,7 +17,8 @@ Each query allows up to **100** ranked answers. Scoring uses R-Score per answer 
 | Path | Purpose |
 |------|---------|
 | `engine/` | Retrieval: CLIP/ASR encoders, FAISS, keyframe→ASR map, `search()` |
-| `api/` | FastAPI wrapper around `SearchService.search` (`GET /check_health`, `POST /search`) |
+| `api/` | FastAPI wrapper around `SearchService.search`, including local media endpoints |
+| `ui/` | Web UI for Textual KIS search, result inspection, copy and CSV export |
 | `preprocessing_tools/` | Offline extract (keyframes/CLIP, Whisper ASR) |
 | `kaggle_script/` | Kaggle / local notebooks (CLIP merge, ASR embed, ASR merge, SigLIP2 embed) |
 | `features/` | Local retrieval index (gitignored) |
@@ -82,4 +83,9 @@ python -m venv .venv
 # .env: FEATURES_ROOT=.../features  and optional DEVICE=cpu|gpu
 python -m engine.search_service
 uvicorn api.app:app --host 127.0.0.1 --port 8000
+
+# In another terminal
+cd ui
+npm install
+npm run dev
 ```

@@ -147,6 +147,7 @@ def build_row_index_map_info(
         "video_ids": [],
         "pts_list": [],
         "frame_idx_list": [],
+        "fps_list": [],
         "row_to_idx_in_each_video": [],
     }
     n_clip = 0
@@ -160,14 +161,16 @@ def build_row_index_map_info(
             map_rows = list(csv.DictReader(f))
         pts = [float(r["pts_time"]) for r in map_rows]
         frame_idx = [int(r["frame_idx"]) for r in map_rows]
-        if len(pts) < n or len(frame_idx) < n:
+        fps = [float(r["fps"]) for r in map_rows]
+        if len(pts) < n or len(frame_idx) < n or len(fps) < n:
             raise ValueError(
                 f"{video_id}: map.csv has {len(pts)} pts / {len(frame_idx)} "
-                f"frame_idx, clip gallery n_rows={n}"
+                f"frame_idx / {len(fps)} fps, clip gallery n_rows={n}"
             )
         info["video_ids"].extend([video_id] * n)
         info["pts_list"].extend(pts[:n])
         info["frame_idx_list"].extend(frame_idx[:n])
+        info["fps_list"].extend(fps[:n])
         info["row_to_idx_in_each_video"].extend(list(range(n)))
         n_clip += n
 

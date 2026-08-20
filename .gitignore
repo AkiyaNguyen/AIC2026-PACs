@@ -6,7 +6,7 @@ features/
 media-info-aic25-b1/
 PreviousTeamSubmission/
 queries/
-tests/
+/tests/
 AGENTS.md
 .env
 .env.*

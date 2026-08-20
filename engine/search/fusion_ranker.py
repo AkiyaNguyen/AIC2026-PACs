@@ -53,6 +53,7 @@ class KisFusionRanker:
                         row_index_map_info["row_to_idx_in_each_video"][row]
                     ),
                     "frame_idx": int(row_index_map_info["frame_idx_list"][row]),
+                    "fps": float(row_index_map_info["fps_list"][row]),
                     "source": src,
                 }
             )

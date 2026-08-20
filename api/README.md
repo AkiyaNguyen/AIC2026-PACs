@@ -8,10 +8,21 @@ Required for `engine/` and `api/` (do not commit secrets):
 
 ```
 FEATURES_ROOT=<absolute path to features/>
+KEYFRAMES_ROOT=<absolute path to media/keyframes/>
+VIDEOS_ROOT=<absolute path to media/videos/>
 DEVICE=cpu
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ```
 
 `DEVICE` is optional (`cpu` | `gpu`; default `gpu`).
+`CORS_ORIGINS` is optional and controls which browser origins may call the API.
+`KEYFRAMES_ROOT` contains flat `VIDEO_ID/000000.webp` folders. Search hits include
+`thumbnail_url` only when the matching still is available locally.
+`VIDEOS_ROOT` contains `video_BATCH/VIDEO_ID.mp4` files. Search hits include
+`video_url` only when the matching MP4 exists. The video endpoint supports HTTP byte
+ranges through Starlette `FileResponse`, allowing browser seeking without a full download.
+Each hit also includes `fps` for playhead-to-frame conversion and `source` to show
+whether the candidate came from visual, BM25, semantic transcript, or their union.
 
 ## `POST /search` body
 
@@ -68,6 +79,8 @@ Wait until models finish loading. Docs: http://127.0.0.1:8000/docs
 | Method | Path |
 |--------|------|
 | `GET` | `/check_health` |
+| `GET` | `/media/keyframes/{video_id}/{row_idx_in_video}` |
+| `GET` | `/media/videos/{video_id}` |
 | `POST` | `/search` |
 
 Git Bash: POST JSON with `--data-binary @search.json`, not `curl -d "..."`.

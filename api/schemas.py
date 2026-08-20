@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from engine.search.config import RRF_K, SearchConfig
 
@@ -43,6 +43,19 @@ class SearchRequest(BaseModel):
         description="Pad around segment [start, end] when mapping to keyframes.",
     )
 
+    @model_validator(mode="after")
+    def validate_fusion_weights(self) -> "SearchRequest":
+        if self.weight_visual + self.weight_transcript <= 0:
+            raise ValueError("At least one retrieval channel must have positive weight")
+        if (
+            self.weight_transcript > 0
+            and self.weight_sem_text + self.weight_bm25 <= 0
+        ):
+            raise ValueError(
+                "Transcript fusion requires a positive MiniLM or BM25 weight"
+            )
+        return self
+
     def to_search_config(self) -> SearchConfig:
         return SearchConfig(
             num_candidates_vis=self.num_candidates_visual,
@@ -64,6 +77,10 @@ class Hit(BaseModel):
     pts_time: float
     row_idx_in_video: int
     frame_idx: int
+    fps: float = Field(gt=0.0)
+    source: str = Field(min_length=1)
+    thumbnail_url: str | None = None
+    video_url: str | None = None
 
 
 class SearchResponse(BaseModel):
